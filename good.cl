@@ -15,12 +15,12 @@ class B inherits C {
 
 };
 
-class A inherits B {
+class A {
 
 
 };
 
-Class Main {
+class Main {
 	main():C {
 	  (new C).init(1,true)
 	};
