@@ -21,17 +21,15 @@ class InheritanceNode
 public:
     InheritanceNode(const std::string& name) : m_name(name) {};
 
-    bool AddChild(InheritanceNode*);
+    bool AddChild(InheritanceNode*, std::string&);
     int GetNumChildren() { return m_children.size(); }
     int GetNumDescendants() { return m_numDescendants; } 
-    bool GetCycleDetected() { return m_cycleDetected; }
 
 private:
     std::string m_name;
     std::set<InheritanceNode*> m_children;
-    InheritanceNode* m_parent;
+    InheritanceNode* m_parent; 
     int m_numDescendants = 0;
-    bool m_cycleDetected = false;
     bool m_visited = false;
 };
 

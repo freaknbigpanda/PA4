@@ -86,6 +86,15 @@ static void initialize_constants(void)
 bool InheritanceNode::AddChild(InheritanceNode* newChild)
 {
     auto insertionPair = m_children.insert(newChild);
+    if (insertionPair.second == false) {
+        // child class is multiply defined
+
+        std::stringstream stream;
+        stream << "Class " << newChild->m_name << " is multiply defined" << endl;
+        errorString = stream.str();
+        return false;
+    }
+
     m_numDescendants += newChild->m_numDescendants + 1;
     newChild->m_parent = this;
 
@@ -98,13 +107,10 @@ bool InheritanceNode::AddChild(InheritanceNode* newChild)
         auto insertResult = visitedParents.insert(parent->m_name);
         if (insertResult.second == false)
         {
-            // If we have already added this parent then we have a cycle in the graph
-            if (semant_debug)
-            {
-                std::cout << "Inheritance cycle detected on class " << m_name << std::endl;
-            }
-
-            m_cycleDetected = true;
+            // Cycle detected
+            std::stringstream stream;
+            stream << "Cycle detected with class " << newChild->m_name << " see ";
+            errorString = stream.str();
             return false;
         }
 
@@ -112,7 +118,7 @@ bool InheritanceNode::AddChild(InheritanceNode* newChild)
         parent = parent->m_parent;
     }
 
-    return insertionPair.second;
+    return true;
 }
 
 // todo: Might want to get rid of this copy to m_classes
@@ -127,6 +133,14 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
     { 
         string parentName = m_classes->nth(i)->get_parent()->get_string();
         string childName = m_classes->nth(i)->get_name()->get_string();
+
+        if (parentName == childName)
+        {
+            // class inheritis from itself 
+            semant_error(m_classes->nth(i));
+            error_stream << "Class " << childName << " inherits from itself" << endl;
+            continue;
+        }
 
         // first check to see if the child already exists
         if (inheritanceNodeMap.find(childName) != inheritanceNodeMap.end())
@@ -145,7 +159,14 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
         if (inheritanceNodeMap.find(parentName) != inheritanceNodeMap.end())
         {
             // The node already exists, insert child into its child set
-            inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get());
+            string error_msg;
+            bool successfulInsertion = inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get(), error_msg);
+            if (successfulInsertion == false)
+            {
+                semant_error(m_classes->nth(i));
+                error_stream << error_msg << endl;
+                break;
+            };
         }
         else
         {
@@ -153,18 +174,21 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
             inheritanceNodeMap[parentName] = make_unique<InheritanceNode>(parentName);
 
             // insert child into its child set
-            if (inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get()) == false)
+            string error_msg;
+            bool successfulInsertion = inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get(), error_msg);
+            if (successfulInsertion == false)
             {
-                // If we failed to insert break out of the loop, there is a problem with the inheritance graph
+                semant_error(m_classes->nth(i));
+                error_stream << error_msg << endl;
                 break;
             };
         }
     }
 
-    cout << "Inheritance graph decendants " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() << endl;
-    cout << "Node map size " << inheritanceNodeMap.size() << endl;
+    //cout << "Inheritance graph decendants " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() << endl;
+    //cout << "Node map size " << inheritanceNodeMap.size() << endl;
     //cout << "Does graph have cycles? " << inheritanceNodeMap[No_class->get_string()]->DoesGraphHaveCycles() << endl;
-    cout << inheritanceNodeMap[No_class->get_string()]->GetNumChildren() << endl;
+    //cout << inheritanceNodeMap[No_class->get_string()]->GetNumChildren() << endl;
 
     // Also need to check to see if there are some orphans.. there shouldn't be any orphans in the tree.
     // everything needs to inherit from object
