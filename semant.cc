@@ -1,11 +1,12 @@
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include "semant.h"
 #include "utilities.h"
 
+#include <map>
+#include <set>
+#include <vector>
 
 extern int semant_debug;
 extern char *curr_filename;
@@ -81,12 +82,111 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
+bool InheritanceNode::AddChild(InheritanceNode* newChild)
+{
+    auto insertionPair = m_children.insert(newChild);
+    m_numDescendants += newChild->m_numDescendants + 1;
+    newChild->m_parent = this;
 
+    std::set<std::string> visitedParents;
+    visitedParents.insert(m_name);
 
-ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) {
+    InheritanceNode* parent = m_parent;
+    while (parent != nullptr)
+    {
+        auto insertResult = visitedParents.insert(parent->m_name);
+        if (insertResult.second == false)
+        {
+            // If we have already added this parent then we have a cycle in the graph
+            if (semant_debug)
+            {
+                std::cout << "Inheritance cycle detected on class " << m_name << std::endl;
+            }
 
-    /* Fill this in */
+            m_cycleDetected = true;
+            return false;
+        }
 
+        parent->m_numDescendants += newChild->m_numDescendants + 1;
+        parent = parent->m_parent;
+    }
+
+    return insertionPair.second;
+}
+
+// todo: Might want to get rid of this copy to m_classes
+ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr), m_classes(classes) {
+    install_basic_classes();
+
+    using namespace std;
+
+    map<string, InheritanceNode *> inheritanceNodeMap;
+
+    for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
+    { 
+        string parentName = m_classes->nth(i)->get_parent()->get_string();
+        string childName = m_classes->nth(i)->get_name()->get_string();
+
+        // first check to see if the child already exists
+        if (inheritanceNodeMap.find(childName) != inheritanceNodeMap.end())
+        {
+            // todo: should I do something here to check for multiple definitions of the same class?
+
+            // Don't need to do anything here if the child already exists
+        } 
+        else
+        {
+            // create a new child node
+            InheritanceNode* newChild = new InheritanceNode(childName);
+
+            // add it to the map
+            inheritanceNodeMap[childName] = newChild;
+        }
+
+        // then find out if we have created the parent node already
+        if (inheritanceNodeMap.find(parentName) != inheritanceNodeMap.end())
+        {
+            // The node already exists, insert child into its child set
+            inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName]);
+        }
+        else
+        {
+            // The parent node doesn't exist yet so create it and add it to the map
+            InheritanceNode* newParent = new InheritanceNode(parentName);
+
+            // add it to the map
+            inheritanceNodeMap[parentName] = newParent;
+
+            // insert child into its child set
+            if (newParent->AddChild(inheritanceNodeMap[childName]) == false)
+            {
+                // If we failed to insert break out of the loop, there is a problem with the inheritance graph
+                break;
+            };
+        }
+    }
+
+    // todo: memory management, need to delete all of the inheritanceNodes that I new'ed or use unqiue pointers
+
+    cout << "Inheritance graph decendants " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() << endl;
+    cout << "Node map size " << inheritanceNodeMap.size() << endl;
+    //cout << "Does graph have cycles? " << inheritanceNodeMap[No_class->get_string()]->DoesGraphHaveCycles() << endl;
+    cout << inheritanceNodeMap[No_class->get_string()]->GetNumChildren() << endl;
+
+    // Also need to check to see if there are some orphans.. there shouldn't be any orphans in the tree.
+    // everything needs to inherit from object
+
+    if (semant_debug)
+    {
+        for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
+        { 
+            cout << "Parent is:" << endl;
+            cout << m_classes->nth(i)->get_parent()->get_string() << endl;
+            cout << "Child is:" << endl;
+            cout << m_classes->nth(i)->get_name()->get_string() << endl;
+            cout << endl;
+        }
+    }
 }
 
 void ClassTable::install_basic_classes() {
@@ -113,6 +213,8 @@ void ClassTable::install_basic_classes() {
     // There is no need for method bodies in the basic classes---these
     // are already built in to the runtime system.
 
+    // todo: really unfortunate that there is no in place method to append these classes.. as far as I can tell it is copying the whole list to a new list with the appended node
+
     Class_ Object_class =
 	class_(Object, 
 	       No_class,
@@ -122,6 +224,7 @@ void ClassTable::install_basic_classes() {
 					       single_Features(method(type_name, nil_Formals(), Str, no_expr()))),
 			       single_Features(method(copy, nil_Formals(), SELF_TYPE, no_expr()))),
 	       filename);
+    m_classes = append_Classes(m_classes, single_Classes(Object_class));
 
     // 
     // The IO class inherits from Object. Its methods are
@@ -142,7 +245,8 @@ void ClassTable::install_basic_classes() {
 										      SELF_TYPE, no_expr()))),
 					       single_Features(method(in_string, nil_Formals(), Str, no_expr()))),
 			       single_Features(method(in_int, nil_Formals(), Int, no_expr()))),
-	       filename);  
+	       filename);
+    m_classes = append_Classes(m_classes, single_Classes(IO_class));
 
     //
     // The Int class has no methods and only a single attribute, the
@@ -153,12 +257,14 @@ void ClassTable::install_basic_classes() {
 	       Object,
 	       single_Features(attr(val, prim_slot, no_expr())),
 	       filename);
+    m_classes = append_Classes(m_classes, single_Classes(Int_class));     
 
     //
     // Bool also has only the "val" slot.
     //
     Class_ Bool_class =
 	class_(Bool, Object, single_Features(attr(val, prim_slot, no_expr())),filename);
+    m_classes = append_Classes(m_classes, single_Classes(Bool_class));
 
     //
     // The class Str has a number of slots and operations:
@@ -188,6 +294,7 @@ void ClassTable::install_basic_classes() {
 						      Str, 
 						      no_expr()))),
 	       filename);
+    m_classes = append_Classes(m_classes, single_Classes(Str_class));
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -247,8 +354,8 @@ void program_class::semant()
     /* some semantic analysis code may go here */
 
     if (classtable->errors()) {
-	cerr << "Compilation halted due to static semantic errors." << endl;
-	exit(1);
+        cerr << "Compilation halted due to static semantic errors." << endl;
+        exit(1);
     }
 }
 

@@ -12,7 +12,7 @@ grading/**
 semant
 cgen
 parser
-myparser
 cool.tab.h
 cool.tab.c
 cool-parse.cc
+symtab_example
