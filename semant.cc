@@ -7,6 +7,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <memory>
 
 extern int semant_debug;
 extern char *curr_filename;
@@ -120,7 +121,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
 
     using namespace std;
 
-    map<string, InheritanceNode *> inheritanceNodeMap;
+    map<string, unique_ptr<InheritanceNode>> inheritanceNodeMap;
 
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
@@ -136,37 +137,29 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
         } 
         else
         {
-            // create a new child node
-            InheritanceNode* newChild = new InheritanceNode(childName);
-
-            // add it to the map
-            inheritanceNodeMap[childName] = newChild;
+            // create a new child node and add it to the map
+            inheritanceNodeMap[childName] = make_unique<InheritanceNode>(childName);
         }
 
         // then find out if we have created the parent node already
         if (inheritanceNodeMap.find(parentName) != inheritanceNodeMap.end())
         {
             // The node already exists, insert child into its child set
-            inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName]);
+            inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get());
         }
         else
         {
-            // The parent node doesn't exist yet so create it and add it to the map
-            InheritanceNode* newParent = new InheritanceNode(parentName);
-
             // add it to the map
-            inheritanceNodeMap[parentName] = newParent;
+            inheritanceNodeMap[parentName] = make_unique<InheritanceNode>(parentName);
 
             // insert child into its child set
-            if (newParent->AddChild(inheritanceNodeMap[childName]) == false)
+            if (inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get()) == false)
             {
                 // If we failed to insert break out of the loop, there is a problem with the inheritance graph
                 break;
             };
         }
     }
-
-    // todo: memory management, need to delete all of the inheritanceNodes that I new'ed or use unqiue pointers
 
     cout << "Inheritance graph decendants " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() << endl;
     cout << "Node map size " << inheritanceNodeMap.size() << endl;
