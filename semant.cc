@@ -137,6 +137,14 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
         string parentName = m_classes->nth(i)->get_parent()->get_string();
         string childName = m_classes->nth(i)->get_name()->get_string();
 
+        if (parentName == Int->get_string() || parentName == Bool->get_string() || parentName == Str->get_string())
+        {
+            // class inherits from a basic type
+            semant_error(m_classes->nth(i));
+            error_stream << "Class " << childName << " inherits from either Int, Bool, or String. This is illegal." << endl;
+            continue;
+        }
+
         auto insertResult = allDefinedChildren.insert(childName);
         if (insertResult.second == false)
         {
