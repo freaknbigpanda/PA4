@@ -44,6 +44,8 @@ class ClassTable {
 private:
   int semant_errors;
   void install_basic_classes();
+  bool ValidateInheritance();
+  bool CheckTypes();
   ostream& error_stream;
   Classes m_classes;
 
