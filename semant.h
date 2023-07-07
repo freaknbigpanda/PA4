@@ -22,8 +22,10 @@ public:
     InheritanceNode(const std::string& name) : m_name(name) {};
 
     bool AddChild(InheritanceNode*, std::string&);
+    bool HasParent() { return m_parent != nullptr; } 
     int GetNumChildren() { return m_children.size(); }
     int GetNumDescendants() { return m_numDescendants; } 
+    std::string GetName() { return m_name; }
 
 private:
     std::string m_name;

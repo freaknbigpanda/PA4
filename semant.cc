@@ -83,7 +83,7 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
-bool InheritanceNode::AddChild(InheritanceNode* newChild)
+bool InheritanceNode::AddChild(InheritanceNode* newChild, std::string& errorString)
 {
     auto insertionPair = m_children.insert(newChild);
     if (insertionPair.second == false) {
@@ -128,11 +128,23 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
     using namespace std;
 
     map<string, unique_ptr<InheritanceNode>> inheritanceNodeMap;
+    
+    // Just used to check for multiply defined children
+    set<string> allDefinedChildren;
 
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         string parentName = m_classes->nth(i)->get_parent()->get_string();
         string childName = m_classes->nth(i)->get_name()->get_string();
+
+        auto insertResult = allDefinedChildren.insert(childName);
+        if (insertResult.second == false)
+        {
+            // class is defined multiple times
+            semant_error(m_classes->nth(i));
+            error_stream << "Class " << childName << " multiply defined" << endl;
+            continue;
+        }
 
         if (parentName == childName)
         {
@@ -145,8 +157,6 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
         // first check to see if the child already exists
         if (inheritanceNodeMap.find(childName) != inheritanceNodeMap.end())
         {
-            // todo: should I do something here to check for multiple definitions of the same class?
-
             // Don't need to do anything here if the child already exists
         } 
         else
@@ -185,16 +195,46 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
         }
     }
 
-    //cout << "Inheritance graph decendants " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() << endl;
-    //cout << "Node map size " << inheritanceNodeMap.size() << endl;
-    //cout << "Does graph have cycles? " << inheritanceNodeMap[No_class->get_string()]->DoesGraphHaveCycles() << endl;
-    //cout << inheritanceNodeMap[No_class->get_string()]->GetNumChildren() << endl;
+    // Every node must have a non-null parent (even object which has a no_class parent)
+    for ( auto i = inheritanceNodeMap.begin(); i != inheritanceNodeMap.end(); ++i)
+    {
+        InheritanceNode* node = i->second.get();
 
-    // Also need to check to see if there are some orphans.. there shouldn't be any orphans in the tree.
-    // everything needs to inherit from object
+        if (node->GetName() == No_class->get_string()) continue; //No class is the only exception to this rule
+
+        if (node->HasParent() == false)
+        {
+            // Find the child class for this orphaned parent
+            bool found = false; // just for sanity check, we should always be able to find the child of the undefined parent
+            for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
+            { 
+                if (node->GetName() == m_classes->nth(i)->get_parent()->get_string())
+                {
+                    found = true;
+                    semant_error(m_classes->nth(i));
+                    error_stream << "parent class of " << m_classes->nth(i)->get_name() << " is not defined" << endl;
+                    break;
+                }
+            }
+            if (found == false)
+            {
+                error_stream << "Programmer error! some assumption is wrong" << endl;
+            }
+        }
+    }
+
+    // Main must exist
+    if (inheritanceNodeMap.find("Main") == inheritanceNodeMap.end())
+    {
+        semant_error();
+        error_stream << "Main class is not defined in the program" << endl;
+    }
 
     if (semant_debug)
     {
+        cout << "The number of nodes in the inheritance node map is " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() + 1 << endl;
+        cout << "The number of classes that we encountred (parent and child) in the ast is " << inheritanceNodeMap.size() << endl;
+
         for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
         { 
             cout << "Parent is:" << endl;
