@@ -21,11 +21,16 @@ class InheritanceNode
 public:
     InheritanceNode(const std::string& name) : m_name(name) {};
 
+    const InheritanceNode* lub(const InheritanceNode* otherNode, std::string& errorStr);
     bool AddChild(InheritanceNode*, std::string&);
     bool HasParent() { return m_parent != nullptr; } 
+    bool HasParent() const { return m_parent != nullptr; } 
     int GetNumChildren() { return m_children.size(); }
+    int GetNumChildren() const { return m_children.size(); }
     int GetNumDescendants() { return m_numDescendants; } 
+    int GetNumDescendants() const { return m_numDescendants; } 
     std::string GetName() { return m_name; }
+    std::string GetName() const { return m_name; }
 
 private:
     std::string m_name;

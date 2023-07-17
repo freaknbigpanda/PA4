@@ -83,7 +83,46 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
-bool InheritanceNode::AddChild(InheritanceNode* newChild, std::string& errorString)
+const InheritanceNode* InheritanceNode::lub(const InheritanceNode* otherNode, std::string& errorString)
+{
+    using namespace std;
+
+    if (otherNode == nullptr)
+    {
+        std::stringstream stream;
+        stream << "Passed nullptr to lub function" << endl;
+        errorString = stream.str();
+        return nullptr;
+    }
+    
+    // First build a map of ancestors for the current node (including the current node itself)
+    std::set<std::string> ancestors;
+    InheritanceNode* parent = this;
+    while(parent != nullptr)
+    {
+        ancestors.insert(parent->GetName());
+        parent = parent->m_parent;
+    }
+
+    // Then iterate up the inheritance graph from the othernode and return the first match
+    const InheritanceNode* otherParent = otherNode;
+    while(ancestors.find(otherParent->m_name) == ancestors.end())
+    {
+        otherParent = otherParent->m_parent;
+
+        if (otherParent == nullptr)
+        {
+            std::stringstream stream;
+            stream << "Class " << otherNode->m_name << " and " << m_name << " have no common ancestor" << endl;
+            errorString = stream.str();
+            return nullptr;
+        }
+    }
+
+    return otherParent;
+}
+
+bool InheritanceNode::AddChild(InheritanceNode *newChild, std::string &errorString)
 {
     auto insertionPair = m_children.insert(newChild);
     if (insertionPair.second == false) {
@@ -360,6 +399,10 @@ bool ClassTable::ValidateInheritance()
 
     if (semant_debug)
     {
+        // std::string errorString;
+        // const InheritanceNode* lub = inheritanceNodeMap["A"]->lub(inheritanceNodeMap["C"].get(), errorString);
+        // cout << "The common ancestor of bool and string is " << lub->GetName() << endl;
+
         cout << "The number of nodes in the inheritance node map is " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() + 1 << endl;
         cout << "The number of classes that we encountred (parent and child) in the ast is " << inheritanceNodeMap.size() << endl;
 
