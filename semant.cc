@@ -166,7 +166,15 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
 
     if (ValidateInheritance())
     {
-        CheckTypes();
+        if (CheckTypes())
+        {
+            std::cout << "Success!" << std::endl;
+        }
+        else
+        {
+            error_stream << "Types are messed up" << endl;
+        }
+
     }
     else
     {
@@ -419,16 +427,73 @@ bool ClassTable::ValidateInheritance()
     return semant_errors == 0;
 }
 
+// I need some method with a signature like ClassTable::VerifyExpression('environment', expression)
+
 bool ClassTable::CheckTypes()
 {
+    TypeEnvironment typeEnvironment;
+    bool success = true;
+
+    // Gather all declared classes in the symbol table
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
-        cout << "Parent is:" << endl;
-        cout << m_classes->nth(i)->get_parent()->get_string() << endl;
-        cout << "Child is:" << endl;
-        cout << m_classes->nth(i)->get_name()->get_string() << endl;
-        cout << endl;
+        std::string className = m_classes->nth(i)->get_name()->get_string();
+        typeEnvironment.symbols.addid(className, m_classes->nth(i));
     }
+
+    // For each class gather attributes into the symbol table and mark their types in the ast
+    // todo: figure out how to type check the attribute initialization expressions
+    for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
+    { 
+        typeEnvironment.EnterScope();
+        typeEnvironment.currentClass = m_classes->nth(i);
+
+        // First add attributes to the symbol table and type check the expressions..
+        Features features = m_classes->nth(i)->get_features();
+        for (int i = features->first(); features->more(i); i = features->next(i))
+        {
+            Feature feature = features->nth(i);
+            std::string attr_name = feature->get_name()->get_string();
+            // First make sure that the attribute is not previously defined
+            bool previouslyDefined = feature->is_attr() ? typeEnvironment.symbols.probe(attr_name) != nullptr :
+            typeEnvironment.methods.probe(attr_name) != nullptr;
+
+            if (previouslyDefined == false)
+            {
+                // Attribute not previously defined so we can add it to the symbol table
+                if (feature->is_attr())
+                {
+                    typeEnvironment.symbols.addid(attr_name, feature);
+                }
+                else
+                {
+                    typeEnvironment.methods.addid(attr_name, feature);
+                } 
+
+                // Recursively type check the init expression
+                // TypeCheckExpresion(typeEnvironment
+            }
+            else
+            {
+                // Attribute with same name defined twice - no good
+                semant_error(typeEnvironment.currentClass->get_filename(), feature);
+                std::string featureType = feature->is_attr() ? "Attribute" : "Method";
+                error_stream << featureType << " defined twice in the same class." << endl;
+                success = false;
+                break; // don't continue processing features if there is an error
+                // todo: check if this is the correct behaviour
+            }
+        }
+
+        typeEnvironment.ExitScope();
+    }
+
+    return success;
+}
+
+bool ClassTable::TypeCheckExpresion(TypeEnvironment& typeEnvironment,  tree_node* expression)
+{
+    return false;
 }
 
 ////////////////////////////////////////////////////////////////////

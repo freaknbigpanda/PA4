@@ -40,6 +40,18 @@ private:
     bool m_visited = false;
 };
 
+struct TypeEnvironment
+{
+  TypeEnvironment() { EnterScope(); }
+
+  void EnterScope() { symbols.enterscope(); methods.enterscope(); }
+  void ExitScope() { symbols.exitscope(); methods.exitscope(); }
+
+  SymbolTable<std::string, tree_node> symbols;
+  SymbolTable<std::string, tree_node> methods;
+  Class_ currentClass;
+};
+
 // This is a structure that may be used to contain the semantic
 // information such as the inheritance graph.  You may use it or not as
 // you like: it is only here to provide a container for the supplied
@@ -51,6 +63,8 @@ private:
   void install_basic_classes();
   bool ValidateInheritance();
   bool CheckTypes();
+  bool TypeCheckExpresion(TypeEnvironment& typeEnvironment, tree_node* expression);
+
   ostream& error_stream;
   Classes m_classes;
 
