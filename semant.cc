@@ -438,7 +438,7 @@ bool ClassTable::CheckTypes()
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         std::string className = m_classes->nth(i)->get_name()->get_string();
-        typeEnvironment.symbols.addid(className, m_classes->nth(i));
+        typeEnvironment.symbols.addid(className, m_classes->nth(i)->get_name_ptr());
     }
 
     // For each class gather attributes into the symbol table and mark their types in the ast
@@ -453,25 +453,42 @@ bool ClassTable::CheckTypes()
         for (int i = features->first(); features->more(i); i = features->next(i))
         {
             Feature feature = features->nth(i);
-            std::string attr_name = feature->get_name()->get_string();
+            std::string featureName = feature->get_name()->get_string();
             // First make sure that the attribute is not previously defined
-            bool previouslyDefined = feature->is_attr() ? typeEnvironment.symbols.probe(attr_name) != nullptr :
-            typeEnvironment.methods.probe(attr_name) != nullptr;
+            bool previouslyDefined = feature->is_attr() ? typeEnvironment.symbols.probe(featureName) != nullptr :
+            typeEnvironment.methods.probe(featureName) != nullptr;
 
             if (previouslyDefined == false)
             {
                 // Attribute not previously defined so we can add it to the symbol table
                 if (feature->is_attr())
                 {
-                    typeEnvironment.symbols.addid(attr_name, feature);
+                    typeEnvironment.symbols.addid(featureName, feature->get_type_ptr());
                 }
                 else
                 {
-                    typeEnvironment.methods.addid(attr_name, feature);
+                    typeEnvironment.methods.addid(featureName, feature->get_type_ptr());
                 } 
 
-                // Recursively type check the init expression
-                // TypeCheckExpresion(typeEnvironment
+                //todo: don't I need to type check the formals as well for the method as well?
+                //todo: there is a lot of stuff we need to do with the formals, add to symbol tables etc
+                //todo: really don't like how I am storing pointers to the symbol objects in the symbol table.. really unsafe
+                // I would rather be storing just straight copies.. I would like to modify the symbol table to take copies if possible
+
+                // Recursively type check the expression if it not NoExpr class
+                // todo: this is getting really messy, and only for attributes
+                Expression expression = feature->get_expression();
+                if (feature->is_attr() && expression->get_expr_type() != ExpressionType::NoExpr) {
+                    Symbol expressionType = TypeCheckExpresion(typeEnvironment, expression);
+
+                    if (strcmp(feature->get_type()->get_string(), expressionType->get_string()) != 0)
+                    {
+                        semant_error(typeEnvironment.currentClass->get_filename(), feature);
+                        error_stream << "Attribute initialization type mismatch" << endl;
+                        success = false;
+                        break;
+                    }
+                }
             }
             else
             {
@@ -491,9 +508,41 @@ bool ClassTable::CheckTypes()
     return success;
 }
 
-bool ClassTable::TypeCheckExpresion(TypeEnvironment& typeEnvironment,  tree_node* expression)
+Symbol ClassTable::TypeCheckExpresion(TypeEnvironment& typeEnvironment,  Expression expression)
 {
-    return false;
+    Symbol expressionType;
+    switch(expression->get_expr_type())
+    {
+        case ExpressionType::IntConst:
+        {
+            expressionType = Int;
+            break;
+        }
+        case ExpressionType::BoolConst:
+        {
+            expressionType = Bool;
+            break;
+        }
+        case ExpressionType::StringConst:
+        {
+            expressionType = Str;
+            break;
+        }
+        case ExpressionType::Object:
+        {
+            std::string symbolName = static_cast<object_class*>(expression)->get_name()->get_string();
+            expressionType = *typeEnvironment.symbols.lookup(symbolName);
+            break;
+        }
+        default:
+        {
+            //todo: error case
+
+        }
+    }
+
+    expression->set_type(expressionType);
+    return expressionType;
 }
 
 ////////////////////////////////////////////////////////////////////

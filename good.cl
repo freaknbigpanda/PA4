@@ -1,14 +1,8 @@
 class Main {
-	a: Int <- 1 + 1;
-	b: Bool <- false;
-	b(): Bool {
-		false
-	};
-	b(): Int {
-		43
-	};
-	main():Int {
-		42
+	a: Int <- 42;
+	b: Bool <- 42;
+	main():Bool {
+		b
 	};
 };
 

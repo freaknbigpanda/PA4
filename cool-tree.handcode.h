@@ -44,6 +44,33 @@ typedef Expressions_class *Expressions;
 typedef list_node<Case> Cases_class;
 typedef Cases_class *Cases;
 
+enum class ExpressionType: uint8_t {
+	Assign,
+	StaticDispatch,
+	Dispatch,
+	Condition,
+	Loop,
+	TypeCase,
+	Block,
+	Let,
+	Plus,
+	Sub,
+	Mul,
+	Divide,
+	Neg,
+    Lt,
+    Eq,
+    Leq,
+    Comp,
+    IntConst,
+    BoolConst,
+    StringConst,
+    New,
+    IsVoid,
+    NoExpr,
+    Object
+};
+
 #define Program_EXTRAS                          \
 virtual void semant() = 0;			\
 virtual void dump_with_types(ostream&, int) = 0; 
@@ -76,30 +103,28 @@ virtual void dump_with_types(ostream&,int) = 0; \
 virtual bool is_attr() = 0;	\
 virtual Symbol get_name() = 0;	\
 virtual Symbol get_type() = 0; \
+virtual Symbol* get_type_ptr() = 0; \
 virtual Expression get_expression() = 0;
 
 #define attr_EXTRAS \
 bool is_attr() { return true; }	\
 Symbol get_name() { return name; } \
 Symbol get_type() { return type_decl; } \
+Symbol* get_type_ptr() { return &type_decl; } \
 Expression get_expression() { return init; }
 
 #define method_EXTRAS \
 bool is_attr() { return false; }	\
 Symbol get_name() { return name; }	\
 Symbol get_type() { return return_type; } \
+Symbol* get_type_ptr() { return &return_type; } \
 Expression get_expression() { return expr; } 
 
 #define Feature_SHARED_EXTRAS                                       \
 void dump_with_types(ostream&,int);    
 
-
-
-
-
 #define Formal_EXTRAS                              \
 virtual void dump_with_types(ostream&,int) = 0;
-
 
 #define formal_EXTRAS                           \
 void dump_with_types(ostream&,int);
@@ -119,7 +144,81 @@ Symbol get_type() { return type; }           \
 Expression set_type(Symbol s) { type = s; return this; } \
 virtual void dump_with_types(ostream&,int) = 0;  \
 void dump_type(ostream&, int);               \
-Expression_class() { type = (Symbol) NULL; }
+Expression_class() { type = (Symbol) NULL; } \
+virtual ExpressionType get_expr_type() = 0;
+
+#define assign_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Assign; }
+
+#define static_dispatch_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::StaticDispatch; }
+
+#define dispatch_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Dispatch; }
+
+#define cond_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Condition; }
+
+#define loop_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Loop; }
+
+#define typcase_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::TypeCase; }
+
+#define block_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Block; }
+
+#define let_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Let; }
+
+#define plus_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Plus; }
+
+#define sub_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Sub; }
+
+#define mul_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Mul; }
+
+#define divide_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Divide; }
+
+#define neg_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Neg; }
+
+#define lt_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Lt; }
+
+#define eq_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Eq; }
+
+#define leq_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Leq; }
+
+#define comp_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Comp; }
+
+#define int_const_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::IntConst; }
+
+#define bool_const_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::BoolConst; }
+
+#define string_const_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::StringConst; }
+
+#define new__EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::New; }
+
+#define isvoid_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::IsVoid; }
+
+#define no_expr_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::NoExpr; }
+
+#define object_EXTRAS	\
+ExpressionType get_expr_type() { return ExpressionType::Object; }	\
+Symbol get_name() { return name; }
 
 #define Expression_SHARED_EXTRAS           \
 void dump_with_types(ostream&,int); 

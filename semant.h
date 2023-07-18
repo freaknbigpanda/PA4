@@ -47,8 +47,8 @@ struct TypeEnvironment
   void EnterScope() { symbols.enterscope(); methods.enterscope(); }
   void ExitScope() { symbols.exitscope(); methods.exitscope(); }
 
-  SymbolTable<std::string, tree_node> symbols;
-  SymbolTable<std::string, tree_node> methods;
+  SymbolTable<std::string, Symbol> symbols;
+  SymbolTable<std::string, Symbol> methods;
   Class_ currentClass;
 };
 
@@ -63,7 +63,7 @@ private:
   void install_basic_classes();
   bool ValidateInheritance();
   bool CheckTypes();
-  bool TypeCheckExpresion(TypeEnvironment& typeEnvironment, tree_node* expression);
+  Symbol TypeCheckExpresion(TypeEnvironment& typeEnvironment, Expression expression);
 
   ostream& error_stream;
   Classes m_classes;
