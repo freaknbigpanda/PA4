@@ -570,23 +570,20 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             break;
         }
         case ExpressionType::Plus:
+        case ExpressionType::Sub:
+        case ExpressionType::Divide:
+        case ExpressionType::Mul:
         {
-            Symbol lhs = TypeCheckExpression(typeEnvironment, static_cast<plus_class*>(expression)->get_lhs());
-            if (lhs == nullptr || lhs != Int)
+            Symbol lhs = TypeCheckExpression(typeEnvironment, expression->get_lhs());
+            Symbol rhs = TypeCheckExpression(typeEnvironment, expression->get_rhs());
+            if (lhs == nullptr || lhs != Int || rhs == nullptr || rhs != Int)
             {
                 semant_error(typeEnvironment.currentClass->get_filename(), expression);
-                error_stream << "Addition opeation is only valid between two Ints" << endl;
+                error_stream << "Opeation is only valid between two Ints" << endl;
+                expressionType = nullptr;
                 break;
             }
-
-            Symbol rhs = TypeCheckExpression(typeEnvironment, static_cast<plus_class*>(expression)->get_rhs());
-            if (rhs == nullptr || rhs != Int)
-            {
-                semant_error(typeEnvironment.currentClass->get_filename(), expression);
-                error_stream << "Addition opeation is only valid between two Ints" << endl;
-                break;
-            } 
-            
+        
             expressionType = Int;
             break;
         }

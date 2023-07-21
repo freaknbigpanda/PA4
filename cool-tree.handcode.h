@@ -145,7 +145,9 @@ Expression set_type(Symbol s) { type = s; return this; } \
 virtual void dump_with_types(ostream&,int) = 0;  \
 void dump_type(ostream&, int);               \
 Expression_class() { type = (Symbol) NULL; } \
-virtual ExpressionType get_expr_type() = 0;
+virtual ExpressionType get_expr_type() = 0;	\
+virtual Expression get_lhs() { return nullptr; } \
+virtual Expression get_rhs() { return nullptr; }
 
 #define assign_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Assign; }
@@ -172,18 +174,24 @@ ExpressionType get_expr_type() { return ExpressionType::Block; }
 ExpressionType get_expr_type() { return ExpressionType::Let; }
 
 #define plus_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Plus; } \
+ExpressionType get_expr_type() { return ExpressionType::Plus; }	\
 Expression get_lhs() { return e1; } \
 Expression get_rhs() { return e2; }
 
 #define sub_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Sub; }
+ExpressionType get_expr_type() { return ExpressionType::Sub; }	\
+Expression get_lhs() { return e1; } \
+Expression get_rhs() { return e2; }
 
 #define mul_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Mul; }
+ExpressionType get_expr_type() { return ExpressionType::Mul; }	\
+Expression get_lhs() { return e1; } \
+Expression get_rhs() { return e2; }
 
 #define divide_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Divide; }
+ExpressionType get_expr_type() { return ExpressionType::Divide; }	\
+Expression get_lhs() { return e1; } \
+Expression get_rhs() { return e2; }
 
 #define neg_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Neg; }
