@@ -438,7 +438,7 @@ bool ClassTable::CheckTypes()
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         std::string className = m_classes->nth(i)->get_name()->get_string();
-        typeEnvironment.symbols.addid(className, m_classes->nth(i)->get_name_ptr());
+        typeEnvironment.symbols.addid(className, m_classes->nth(i)->get_name());
     }
 
     // For each class gather attributes into the symbol table and mark their types in the ast
@@ -448,13 +448,19 @@ bool ClassTable::CheckTypes()
         typeEnvironment.EnterScope();
         typeEnvironment.currentClass = m_classes->nth(i);
 
-        // First add attributes to the symbol table and type check the expressions..
+        // First add feature to the symbol table and type check the expressions
         Features features = m_classes->nth(i)->get_features();
         for (int i = features->first(); features->more(i); i = features->next(i))
         {
+            // Need to exit method scope if the last feature was a method
+            if (i-1 >= 0 && features->nth(i-1)->is_attr() == false) 
+            {
+                typeEnvironment.ExitScope();
+            }
+
             Feature feature = features->nth(i);
             std::string featureName = feature->get_name()->get_string();
-            // First make sure that the attribute is not previously defined
+            // First make sure that the feature is not previously defined
             bool previouslyDefined = feature->is_attr() ? typeEnvironment.symbols.probe(featureName) != nullptr :
             typeEnvironment.methods.probe(featureName) != nullptr;
 
@@ -463,28 +469,52 @@ bool ClassTable::CheckTypes()
                 // Attribute not previously defined so we can add it to the symbol table
                 if (feature->is_attr())
                 {
-                    typeEnvironment.symbols.addid(featureName, feature->get_type_ptr());
+                    typeEnvironment.symbols.addid(featureName, feature->get_type());
                 }
                 else
                 {
-                    typeEnvironment.methods.addid(featureName, feature->get_type_ptr());
+                    // Enter method scope
+                    typeEnvironment.EnterScope();
+
+                    typeEnvironment.methods.addid(featureName, feature->get_type());
+
+                    Formals formals = static_cast<method_class*>(feature)->get_formals();
+
+                    for(int i = formals->first(); formals->more(i); i = formals->next(i))
+                    {
+                        Formal formal = formals->nth(i);
+                        bool previouslyDefined = typeEnvironment.symbols.probe(formal->get_name()->get_string());
+                        if (previouslyDefined)
+                        {
+                            // Formal with same name defined twice - no good
+                            semant_error(typeEnvironment.currentClass->get_filename(), feature);
+                            error_stream << "Formal parameter defined twice in the same method" << endl;
+                            success = false;
+                            continue; // try to resume semantic analysic at the next feature
+                        }
+
+                        // Add formal
+                        typeEnvironment.symbols.addid(formal->get_name()->get_string(), formal->get_type());
+                    }
+
                 } 
 
-                //todo: don't I need to type check the formals as well for the method as well?
-                //todo: there is a lot of stuff we need to do with the formals, add to symbol tables etc
-                //todo: really don't like how I am storing pointers to the symbol objects in the symbol table.. really unsafe
-                // I would rather be storing just straight copies.. I would like to modify the symbol table to take copies if possible
-
-                // Recursively type check the expression if it not NoExpr class
-                // todo: this is getting really messy, and only for attributes
+                // Recursively type check the expression if it is not NoExpr class
                 Expression expression = feature->get_expression();
-                if (feature->is_attr() && expression->get_expr_type() != ExpressionType::NoExpr) {
-                    Symbol expressionType = TypeCheckExpresion(typeEnvironment, expression);
+                if (expression->get_expr_type() != ExpressionType::NoExpr) {
+                    Symbol expressionType = TypeCheckExpression(typeEnvironment, expression);
 
-                    if (strcmp(feature->get_type()->get_string(), expressionType->get_string()) != 0)
+                    if (expressionType == nullptr)
+                    {
+                        success = false;
+                        break;
+                    }
+
+                    if (feature->get_type() != expressionType)
                     {
                         semant_error(typeEnvironment.currentClass->get_filename(), feature);
-                        error_stream << "Attribute initialization type mismatch" << endl;
+                        std::string errorString = feature->is_attr() ? "Attribute initialization type mismatch" : "Method return type doesn't match method expression type";
+                        error_stream << errorString << endl;
                         success = false;
                         break;
                     }
@@ -498,7 +528,7 @@ bool ClassTable::CheckTypes()
                 error_stream << featureType << " defined twice in the same class." << endl;
                 success = false;
                 break; // don't continue processing features if there is an error
-                // todo: check if this is the correct behaviour
+                // todo: verify that this behavior is correct
             }
         }
 
@@ -508,9 +538,9 @@ bool ClassTable::CheckTypes()
     return success;
 }
 
-Symbol ClassTable::TypeCheckExpresion(TypeEnvironment& typeEnvironment,  Expression expression)
+Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expression expression)
 {
-    Symbol expressionType;
+    Symbol expressionType = nullptr;
     switch(expression->get_expr_type())
     {
         case ExpressionType::IntConst:
@@ -531,7 +561,33 @@ Symbol ClassTable::TypeCheckExpresion(TypeEnvironment& typeEnvironment,  Express
         case ExpressionType::Object:
         {
             std::string symbolName = static_cast<object_class*>(expression)->get_name()->get_string();
-            expressionType = *typeEnvironment.symbols.lookup(symbolName);
+            expressionType = typeEnvironment.symbols.lookup(symbolName);
+            if (expressionType == nullptr)
+            {
+                semant_error(typeEnvironment.currentClass->get_filename(), expression);
+                error_stream << "Identifier not defined in this scope" << endl;
+            }
+            break;
+        }
+        case ExpressionType::Plus:
+        {
+            Symbol lhs = TypeCheckExpression(typeEnvironment, static_cast<plus_class*>(expression)->get_lhs());
+            if (lhs == nullptr || lhs != Int)
+            {
+                semant_error(typeEnvironment.currentClass->get_filename(), expression);
+                error_stream << "Addition opeation is only valid between two Ints" << endl;
+                break;
+            }
+
+            Symbol rhs = TypeCheckExpression(typeEnvironment, static_cast<plus_class*>(expression)->get_rhs());
+            if (rhs == nullptr || rhs != Int)
+            {
+                semant_error(typeEnvironment.currentClass->get_filename(), expression);
+                error_stream << "Addition opeation is only valid between two Ints" << endl;
+                break;
+            } 
+            
+            expressionType = Int;
             break;
         }
         default:
@@ -541,7 +597,10 @@ Symbol ClassTable::TypeCheckExpresion(TypeEnvironment& typeEnvironment,  Express
         }
     }
 
-    expression->set_type(expressionType);
+    if (expressionType != nullptr)
+    {
+        expression->set_type(expressionType);
+    }
     return expressionType;
 }
 
