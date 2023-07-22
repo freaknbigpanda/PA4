@@ -446,6 +446,10 @@ bool ClassTable::CheckTypes()
     // Because other expressions and attributes may refer to them
     // 
 
+    // Also need to deal with inheritance, classes that inherit from other classes should
+    // have access to all methods in the parent class
+    // ALso need to deal with redefinition of methods, remember that they need to have the exact same number and type of formals, and return type
+
     // For each class gather attributes into the symbol table and mark their types in the ast
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
@@ -552,6 +556,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             Symbol name = static_cast<assign_class*>(expression)->get_symbol_name();
             Expression assignExpr = static_cast<assign_class*>(expression)->get_expr();
             Symbol exprType = TypeCheckExpression(typeEnvironment, assignExpr);
+            //todo: this is wrong, need to account for subclasses
             if (exprType != typeEnvironment.symbols.lookup(name->get_string())) 
             {
                 semant_error(typeEnvironment.currentClass->get_filename(), expression);
@@ -573,6 +578,16 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             }
 
             //typeEnvironment.ExitScope();
+            break;
+        }
+        case ExpressionType::New:
+        {
+            expressionType = static_cast<new__class*>(expression)->get_type_name();
+            if (expressionType == SELF_TYPE)
+            {
+                expressionType = typeEnvironment.currentClass->get_name();
+            }
+            
             break;
         }
         case ExpressionType::IntConst:

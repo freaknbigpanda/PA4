@@ -227,7 +227,8 @@ ExpressionType get_expr_type() { return ExpressionType::BoolConst; }
 ExpressionType get_expr_type() { return ExpressionType::StringConst; }
 
 #define new__EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::New; }
+ExpressionType get_expr_type() { return ExpressionType::New; } \
+Symbol get_type_name() { return type_name; }
 
 #define isvoid_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::IsVoid; }

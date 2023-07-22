@@ -1,8 +1,8 @@
 class Main {
-	main(a: Int, b: Int):Int {
-		b <- {
-			42;
-		}
+	a: Bool <- false;
+	b: Bool <- true;
+	init(): Main {
+		new Main
 	};
 };
 
