@@ -4,7 +4,6 @@
 #include "semant.h"
 #include "utilities.h"
 
-#include <map>
 #include <set>
 #include <vector>
 #include <memory>
@@ -83,7 +82,7 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
-const InheritanceNode* InheritanceNode::lub(const InheritanceNode* otherNode, std::string& errorString)
+const InheritanceNode* InheritanceNode::FirstCommonAncestor(const InheritanceNode* otherNode, std::string& errorString) const
 {
     using namespace std;
 
@@ -97,7 +96,7 @@ const InheritanceNode* InheritanceNode::lub(const InheritanceNode* otherNode, st
     
     // First build a map of ancestors for the current node (including the current node itself)
     std::set<std::string> ancestors;
-    InheritanceNode* parent = this;
+    const InheritanceNode* parent = this;
     while(parent != nullptr)
     {
         ancestors.insert(parent->GetName());
@@ -120,6 +119,18 @@ const InheritanceNode* InheritanceNode::lub(const InheritanceNode* otherNode, st
     }
 
     return otherParent;
+}
+
+bool InheritanceNode::IsChildOfOrEqual(const InheritanceNode *potentialParent) const
+{
+    const InheritanceNode* parent = this;
+    while(parent != nullptr)
+    {
+        if (parent == potentialParent) return true;
+        parent = parent->m_parent;
+    }
+
+    return false;
 }
 
 bool InheritanceNode::AddChild(InheritanceNode *newChild, std::string &errorString)
@@ -166,15 +177,7 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
 
     if (ValidateInheritance())
     {
-        if (CheckTypes())
-        {
-            std::cout << "Success!" << std::endl;
-        }
-        else
-        {
-            error_stream << "Types are messed up" << endl;
-        }
-
+        CheckTypes();
     }
     else
     {
@@ -293,8 +296,6 @@ void ClassTable::install_basic_classes() {
 bool ClassTable::ValidateInheritance()
 {
     using namespace std;
-
-    map<string, unique_ptr<InheritanceNode>> inheritanceNodeMap;
     
     // Just used to check for multiply defined children
     set<string> allDefinedChildren;
@@ -330,22 +331,22 @@ bool ClassTable::ValidateInheritance()
         }
 
         // first check to see if the child already exists
-        if (inheritanceNodeMap.find(childName) != inheritanceNodeMap.end())
+        if (m_inheritanceNodeMap.find(childName) != m_inheritanceNodeMap.end())
         {
             // Don't need to do anything here if the child already exists
         } 
         else
         {
             // create a new child node and add it to the map
-            inheritanceNodeMap[childName] = make_unique<InheritanceNode>(childName);
+            m_inheritanceNodeMap[childName] = make_unique<InheritanceNode>(childName);
         }
 
         // then find out if we have created the parent node already
-        if (inheritanceNodeMap.find(parentName) != inheritanceNodeMap.end())
+        if (m_inheritanceNodeMap.find(parentName) != m_inheritanceNodeMap.end())
         {
             // The node already exists, insert child into its child set
             string error_msg;
-            bool successfulInsertion = inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get(), error_msg);
+            bool successfulInsertion = m_inheritanceNodeMap[parentName]->AddChild(m_inheritanceNodeMap[childName].get(), error_msg);
             if (successfulInsertion == false)
             {
                 semant_error(m_classes->nth(i));
@@ -356,11 +357,11 @@ bool ClassTable::ValidateInheritance()
         else
         {
             // add it to the map
-            inheritanceNodeMap[parentName] = make_unique<InheritanceNode>(parentName);
+            m_inheritanceNodeMap[parentName] = make_unique<InheritanceNode>(parentName);
 
             // insert child into its child set
             string error_msg;
-            bool successfulInsertion = inheritanceNodeMap[parentName]->AddChild(inheritanceNodeMap[childName].get(), error_msg);
+            bool successfulInsertion = m_inheritanceNodeMap[parentName]->AddChild(m_inheritanceNodeMap[childName].get(), error_msg);
             if (successfulInsertion == false)
             {
                 semant_error(m_classes->nth(i));
@@ -371,7 +372,7 @@ bool ClassTable::ValidateInheritance()
     }
 
     // Every node must have a non-null parent (even object which has a no_class parent)
-    for ( auto i = inheritanceNodeMap.begin(); i != inheritanceNodeMap.end(); ++i)
+    for ( auto i = m_inheritanceNodeMap.begin(); i != m_inheritanceNodeMap.end(); ++i)
     {
         InheritanceNode* node = i->second.get();
 
@@ -399,7 +400,7 @@ bool ClassTable::ValidateInheritance()
     }
 
     // Main must exist
-    if (inheritanceNodeMap.find("Main") == inheritanceNodeMap.end())
+    if (m_inheritanceNodeMap.find("Main") == m_inheritanceNodeMap.end())
     {
         semant_error();
         error_stream << "Main class is not defined in the program" << endl;
@@ -411,8 +412,8 @@ bool ClassTable::ValidateInheritance()
         // const InheritanceNode* lub = inheritanceNodeMap["A"]->lub(inheritanceNodeMap["C"].get(), errorString);
         // cout << "The common ancestor of bool and string is " << lub->GetName() << endl;
 
-        cout << "The number of nodes in the inheritance node map is " << inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() + 1 << endl;
-        cout << "The number of classes that we encountred (parent and child) in the ast is " << inheritanceNodeMap.size() << endl;
+        cout << "The number of nodes in the inheritance node map is " << m_inheritanceNodeMap[No_class->get_string()]->GetNumDescendants() + 1 << endl;
+        cout << "The number of classes that we encountred (parent and child) in the ast is " << m_inheritanceNodeMap.size() << endl;
 
         for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
         { 
@@ -427,12 +428,9 @@ bool ClassTable::ValidateInheritance()
     return semant_errors == 0;
 }
 
-// I need some method with a signature like ClassTable::VerifyExpression('environment', expression)
-
-bool ClassTable::CheckTypes()
+void ClassTable::CheckTypes()
 {
     TypeEnvironment typeEnvironment;
-    bool success = true;
 
     // Gather all declared classes in the symbol table
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
@@ -444,7 +442,7 @@ bool ClassTable::CheckTypes()
     // Really need to add all methods to the symbol table here.
     // I don't need to type check the expressions but I need to add all class methods to the symbol table
     // Because other expressions and attributes may refer to them
-    // 
+    // Need to check to make sure that we have a main function & class
 
     // Also need to deal with inheritance, classes that inherit from other classes should
     // have access to all methods in the parent class
@@ -497,7 +495,6 @@ bool ClassTable::CheckTypes()
                             // Formal with same name defined twice - no good
                             semant_error(typeEnvironment.currentClass->get_filename(), feature);
                             error_stream << "Formal parameter defined twice in the same method" << endl;
-                            success = false;
                             continue; // try to resume semantic analysic at the next feature
                         }
 
@@ -512,18 +509,13 @@ bool ClassTable::CheckTypes()
                 if (expression->get_expr_type() != ExpressionType::NoExpr) {
                     Symbol expressionType = TypeCheckExpression(typeEnvironment, expression);
 
-                    if (expressionType == nullptr)
-                    {
-                        success = false;
-                        break;
-                    }
+                    if (expressionType == nullptr) break;
 
                     if (feature->get_type() != expressionType)
                     {
                         semant_error(typeEnvironment.currentClass->get_filename(), feature);
                         std::string errorString = feature->is_attr() ? "Attribute initialization type mismatch" : "Method return type doesn't match method expression type";
                         error_stream << errorString << endl;
-                        success = false;
                         break;
                     }
                 }
@@ -534,7 +526,6 @@ bool ClassTable::CheckTypes()
                 semant_error(typeEnvironment.currentClass->get_filename(), feature);
                 std::string featureType = feature->is_attr() ? "Attribute" : "Method";
                 error_stream << featureType << " defined twice in the same class." << endl;
-                success = false;
                 break; // don't continue processing features if there is an error
                 // todo: verify that this behavior is correct
             }
@@ -542,8 +533,18 @@ bool ClassTable::CheckTypes()
 
         typeEnvironment.ExitScope();
     }
+}
 
-    return success;
+bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass)
+{
+    InheritanceNode* childNode = m_inheritanceNodeMap[childClass->get_string()].get();
+    InheritanceNode* parentNode = m_inheritanceNodeMap[potentialParentClass->get_string()].get();
+
+    if (childNode == nullptr || parentNode == nullptr) {
+        error_stream << "Fatal Error: passed child or parent class type symbols to IsClassChildOfClassOrEqual that were not in the inheritanceNodeMap" << endl;
+    }
+
+    return childNode->IsChildOfOrEqual(parentNode);
 }
 
 Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expression expression)
@@ -556,11 +557,14 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             Symbol name = static_cast<assign_class*>(expression)->get_symbol_name();
             Expression assignExpr = static_cast<assign_class*>(expression)->get_expr();
             Symbol exprType = TypeCheckExpression(typeEnvironment, assignExpr);
-            //todo: this is wrong, need to account for subclasses
-            if (exprType != typeEnvironment.symbols.lookup(name->get_string())) 
+
+            // The assign expression is accepted as long as it assigning a subclass of the declared identifier type
+            Symbol parentType = typeEnvironment.symbols.lookup(name->get_string());
+            if (IsClassChildOfClassOrEqual(exprType, parentType) == false) 
             {
                 semant_error(typeEnvironment.currentClass->get_filename(), expression);
                 error_stream << "Assignment expression has a static type that does not match the identifier" << endl;
+                break;
             }
             expressionType = exprType;
             break;

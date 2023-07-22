@@ -9,6 +9,8 @@
 #include "list.h"
 
 #include <set>
+#include <map>
+#include <memory>
 
 #define TRUE 1
 #define FALSE 0
@@ -21,15 +23,12 @@ class InheritanceNode
 public:
     InheritanceNode(const std::string& name) : m_name(name) {};
 
-    const InheritanceNode* lub(const InheritanceNode* otherNode, std::string& errorStr);
+    const InheritanceNode* FirstCommonAncestor(const InheritanceNode* otherNode, std::string& errorStr) const;
+    bool IsChildOfOrEqual(const InheritanceNode* potentialParent) const;
     bool AddChild(InheritanceNode*, std::string&);
-    bool HasParent() { return m_parent != nullptr; } 
     bool HasParent() const { return m_parent != nullptr; } 
-    int GetNumChildren() { return m_children.size(); }
     int GetNumChildren() const { return m_children.size(); }
-    int GetNumDescendants() { return m_numDescendants; } 
     int GetNumDescendants() const { return m_numDescendants; } 
-    std::string GetName() { return m_name; }
     std::string GetName() const { return m_name; }
 
 private:
@@ -57,16 +56,20 @@ struct TypeEnvironment
 // you like: it is only here to provide a container for the supplied
 // methods.
 
+typedef std::map<std::string, std::unique_ptr<InheritanceNode>> InheritanceNodeMap;
+
 class ClassTable {
 private:
   int semant_errors;
   void install_basic_classes();
   bool ValidateInheritance();
-  bool CheckTypes();
+  void CheckTypes();
+  bool IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass);
   Symbol TypeCheckExpression(TypeEnvironment& typeEnvironment, Expression expression);
 
   ostream& error_stream;
   Classes m_classes;
+  InheritanceNodeMap m_inheritanceNodeMap;
 
 public:
   ClassTable(Classes);
