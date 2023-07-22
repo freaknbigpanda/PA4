@@ -441,8 +441,12 @@ bool ClassTable::CheckTypes()
         typeEnvironment.symbols.addid(className, m_classes->nth(i)->get_name());
     }
 
+    // Really need to add all methods to the symbol table here.
+    // I don't need to type check the expressions but I need to add all class methods to the symbol table
+    // Because other expressions and attributes may refer to them
+    // 
+
     // For each class gather attributes into the symbol table and mark their types in the ast
-    // todo: figure out how to type check the attribute initialization expressions
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         typeEnvironment.EnterScope();
@@ -543,6 +547,34 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
     Symbol expressionType = nullptr;
     switch(expression->get_expr_type())
     {
+        case ExpressionType::Assign:
+        {
+            Symbol name = static_cast<assign_class*>(expression)->get_symbol_name();
+            Expression assignExpr = static_cast<assign_class*>(expression)->get_expr();
+            Symbol exprType = TypeCheckExpression(typeEnvironment, assignExpr);
+            if (exprType != typeEnvironment.symbols.lookup(name->get_string())) 
+            {
+                semant_error(typeEnvironment.currentClass->get_filename(), expression);
+                error_stream << "Assignment expression has a static type that does not match the identifier" << endl;
+            }
+            expressionType = exprType;
+            break;
+        }
+        case ExpressionType::Block:
+        {
+            // todo: I guess block expressions don't modify the scope??
+            //typeEnvironment.EnterScope();
+
+            Expressions expressions = static_cast<block_class*>(expression)->get_body();
+            for(int i = expressions->first(); expressions->more(i); i = expressions->next(i))
+            {
+                Expression blockExpr = expressions->nth(i);
+                expressionType = TypeCheckExpression(typeEnvironment, blockExpr);
+            }
+
+            //typeEnvironment.ExitScope();
+            break;
+        }
         case ExpressionType::IntConst:
         {
             expressionType = Int;
@@ -569,6 +601,24 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             }
             break;
         }
+        case ExpressionType::Eq:
+        {
+            Symbol lhs = TypeCheckExpression(typeEnvironment, expression->get_lhs());
+            Symbol rhs = TypeCheckExpression(typeEnvironment, expression->get_rhs());
+            if (lhs != nullptr && rhs != nullptr)
+            {
+                if ((lhs == Int && rhs != Int) || (lhs == Str && rhs != Str)|| (lhs == Bool && rhs != Bool))
+                {
+                    semant_error(typeEnvironment.currentClass->get_filename(), expression);
+                    error_stream << "Comparison can only be made between two basic types" << endl;
+                    break;
+                }
+                expressionType = Bool;
+            }
+            break;
+        }
+        case ExpressionType::Lt:
+        case ExpressionType::Leq:
         case ExpressionType::Plus:
         case ExpressionType::Sub:
         case ExpressionType::Divide:
@@ -583,8 +633,15 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                 expressionType = nullptr;
                 break;
             }
-        
-            expressionType = Int;
+
+            if (expression->get_expr_type() == ExpressionType::Lt || expression->get_expr_type() == ExpressionType::Leq)
+            {
+                expressionType = Bool;
+            }
+            else
+            {
+                expressionType = Int;
+            }
             break;
         }
         default:

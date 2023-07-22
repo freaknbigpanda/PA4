@@ -150,7 +150,9 @@ virtual Expression get_lhs() { return nullptr; } \
 virtual Expression get_rhs() { return nullptr; }
 
 #define assign_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Assign; }
+ExpressionType get_expr_type() { return ExpressionType::Assign; }	\
+Symbol get_symbol_name() { return name; }	\
+Expression get_expr() { return expr; }
 
 #define static_dispatch_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::StaticDispatch; }
@@ -168,7 +170,8 @@ ExpressionType get_expr_type() { return ExpressionType::Loop; }
 ExpressionType get_expr_type() { return ExpressionType::TypeCase; }
 
 #define block_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Block; }
+ExpressionType get_expr_type() { return ExpressionType::Block; }	\
+Expressions get_body() { return body; };
 
 #define let_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Let; }
@@ -197,13 +200,19 @@ Expression get_rhs() { return e2; }
 ExpressionType get_expr_type() { return ExpressionType::Neg; }
 
 #define lt_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Lt; }
+ExpressionType get_expr_type() { return ExpressionType::Lt; }	\
+Expression get_lhs() { return e1; } \
+Expression get_rhs() { return e2; }
 
 #define eq_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Eq; }
+ExpressionType get_expr_type() { return ExpressionType::Eq; }	\
+Expression get_lhs() { return e1; } \
+Expression get_rhs() { return e2; }
 
 #define leq_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Leq; }
+ExpressionType get_expr_type() { return ExpressionType::Leq; }	\
+Expression get_lhs() { return e1; } \
+Expression get_rhs() { return e2; }
 
 #define comp_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Comp; }
