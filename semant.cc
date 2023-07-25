@@ -447,6 +447,7 @@ void ClassTable::CheckTypes()
 
     // ***** METHOD GATHER PASS ***** //
     // Now gather all methods and their formals in the symbol table
+    bool mainDefinedInMain = false;
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         Class_ currentClass = m_classes->nth(i);
@@ -459,15 +460,13 @@ void ClassTable::CheckTypes()
             method_class* methodObject = static_cast<method_class*>(feature);
             MethodKey key = MethodKey(currentClass, methodObject);
             // first check to make sure the method has not been previously defined
-            // todo: test
             if (typeEnvironment.m_methodMap.find(key) != typeEnvironment.m_methodMap.end()) {
-                semant_error(typeEnvironment.m_currentClass->get_filename(), methodObject);
+                semant_error(currentClass->get_filename(), methodObject);
                 error_stream << "Method defined twice in the same class." << endl;
                 continue;
             }
 
             // then check to make sure that the formals are not redfined in the same method
-            // todo: test
             Formals formals = methodObject->get_formals();
             std::set<std::string> formalNames;
             for(int i = formals->first(); formals->more(i); i = formals->next(i))
@@ -477,7 +476,7 @@ void ClassTable::CheckTypes()
                 if (previouslyDefined)
                 {
                     // Formal with same name defined twice - no good
-                    semant_error(typeEnvironment.m_currentClass->get_filename(), formal);
+                    semant_error(currentClass->get_filename(), formal);
                     error_stream << "Formal parameter defined twice in the same method" << endl;
                     continue;
                 }
@@ -486,8 +485,21 @@ void ClassTable::CheckTypes()
                 formalNames.insert(formal->get_name()->get_string());
             }
 
+            if (strcmp(methodObject->get_name()->get_string(), "main") == 0 && 
+                strcmp(currentClass->get_name()->get_string(), "Main") == 0 &&
+                formalNames.size() == 0)
+            {
+                mainDefinedInMain = true;
+            }
+
             typeEnvironment.m_methodMap[key] = MethodInfo(methodObject);
         }
+    }
+
+    if (mainDefinedInMain == false)
+    {
+        semant_error(m_classMap["Main"]);
+        error_stream << "main() method that takes no params must be decalred in Main class" << endl;
     }
 
     // ***** METHOD INHERITANCE CHECK PASS ***** //
@@ -513,7 +525,6 @@ void ClassTable::CheckTypes()
                 if (typeEnvironment.m_methodMap.find(parentKey) != typeEnvironment.m_methodMap.end()) 
                 {
                     // We have found a redefinition in a parent class, need to check to make sure that the number and types of formals are the same
-                    // todo: test
                     if (typeEnvironment.m_methodMap[parentKey] != typeEnvironment.m_methodMap[childKey])
                     {
                         semant_error(currentClass->get_filename(), methodObject);
@@ -549,7 +560,6 @@ void ClassTable::CheckTypes()
             if (typeEnvironment.m_symbols.probe(featureName) != nullptr)
             {
                 // Attribute with same name defined twice - continue to next attribute
-                // todo: test
                 semant_error(typeEnvironment.m_currentClass->get_filename(), feature);
                 error_stream << "Attribute defined twice in the same class." << endl;
                 continue;
@@ -561,6 +571,7 @@ void ClassTable::CheckTypes()
 
         // Now we have a complete list of attributes in our symbol table, continue to type checking
         // todo: test a <- a
+        // This works because I gather the attribute types first but I don't know if it should be working
         
         // Feature type checking
         for (int i = features->first(); features->more(i); i = features->next(i))
@@ -609,7 +620,7 @@ bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialP
     InheritanceNode* parentNode = m_inheritanceNodeMap[potentialParentClass->get_string()].get();
 
     if (childNode == nullptr || parentNode == nullptr) {
-        error_stream << "Fatal Error: passed child or parent class type symbols to IsClassChildOfClassOrEqual that were not in the inheritanceNodeMap" << endl;
+        return false;
     }
 
     return childNode->IsChildOfOrEqual(parentNode);
@@ -631,7 +642,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             if (IsClassChildOfClassOrEqual(exprType, parentType) == false) 
             {
                 semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
-                error_stream << "Assignment expression has a static type that does not match the identifier" << endl;
+                error_stream << "Assignment expression has a static type that does not match the identifier, or the identifier type is unknown" << endl;
                 break;
             }
             expressionType = exprType;
