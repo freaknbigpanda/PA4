@@ -155,10 +155,17 @@ Symbol get_symbol_name() { return name; }	\
 Expression get_expr() { return expr; }
 
 #define static_dispatch_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::StaticDispatch; }
+ExpressionType get_expr_type() { return ExpressionType::StaticDispatch; }	\
+Expression get_identifer_dispatch_expr() { return expr; }	\
+Symbol get_method_name() { return name; }	\
+Expressions get_formal_expressions() { return actual; }	\
+Symbol get_subclass_type() { return type_name; }
 
 #define dispatch_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Dispatch; }
+ExpressionType get_expr_type() { return ExpressionType::Dispatch; }	\
+Expression get_identifer_dispatch_expr() { return expr; }	\
+Symbol get_method_name() { return name; }	\
+Expressions get_formal_expressions() { return actual; }
 
 #define cond_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Condition; }

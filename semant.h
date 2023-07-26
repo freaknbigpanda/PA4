@@ -46,6 +46,8 @@ struct MethodInfo {
   MethodInfo(const MethodInfo& other) = default;
   MethodInfo(method_class* methodObject): 
     m_formals(methodObject->get_formals()), m_returnType(methodObject->get_type()) {}
+
+  
   Formals m_formals = nullptr;
   Symbol m_returnType = nullptr;
 

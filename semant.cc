@@ -663,6 +663,19 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             //typeEnvironment.ExitScope();
             break;
         }
+        case ExpressionType::StaticDispatch:
+        {
+            // <expr>.<id>(<expr>,...,<expr>)
+            // <id>(<expr>,...,<expr>) aka self.<id>(<expr>,...,<expr>)
+            // <expr>@<type>.id(<expr>,...,<expr>)
+
+            // First build a method info object and see it if matches what we have in the typeEnvironment
+            static_dispatch_class* static_dispatch_expr = static_cast<static_dispatch_class*>(expression);
+            Symbol subclassName = static_dispatch_expr->get_subclass_type();
+            
+
+            break;
+        }
         case ExpressionType::New:
         {
             expressionType = static_cast<new__class*>(expression)->get_type_name();
