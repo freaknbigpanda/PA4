@@ -806,6 +806,34 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             }
             break;
         }
+        case ExpressionType::Let:
+        {
+            let_class* letExpr = static_cast<let_class*>(expression);
+
+            Symbol letId = letExpr->get_let_id();
+            Symbol letTypeDecl = letExpr->get_let_type_decl();
+            if (letTypeDecl == SELF_TYPE) letTypeDecl = typeEnvironment.m_currentClass->get_name();
+            Expression letInit = letExpr->get_let_init();
+            Expression letBody = letExpr->get_let_body();	
+
+            if (letInit->get_expr_type() != ExpressionType::NoExpr)
+            {
+                Symbol initType = TypeCheckExpression(typeEnvironment, letInit);
+                if (initType != letTypeDecl)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                    error_stream << "let-init method static type does not match type declaration" << endl;
+                }
+            }
+            
+            typeEnvironment.EnterScope(); // let scope
+            
+            typeEnvironment.m_symbols.addid(letId->get_string(), letTypeDecl);
+            expressionType = TypeCheckExpression(typeEnvironment, letBody);
+
+            typeEnvironment.ExitScope();
+            break;
+        }
         case ExpressionType::IntConst:
         {
             expressionType = Int;
@@ -885,8 +913,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
         }
         default:
         {
-            //todo: error case
-
+            abort(); // All expression types must be handled
         }
     }
 

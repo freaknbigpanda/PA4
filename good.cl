@@ -24,19 +24,21 @@ class A inherits Main {
 			new A;	
 		}
 	};
-	testAgain(a: Int, b: Bool, c: String): SELF_TYPE {
-		new SELF_TYPE
-	};
 };
 
 class Penis inherits A {
 	pp: SELF_TYPE;
 	bbb: Int;
+	ccc: Main;
+	xxx: Int;
+	z: Bool <- true;
 	test(): Bool {
 		{
 			aaa <- true;
 			p <- new Penis;
-			pp <- (new Penis)@A.testAgain(45, true, "hello");
+			pp <- testAgain(45, true, "hello");
+			ccc <- if true then new Penis else new Penis fi;
+			pp <- let x: Int <- 42, y: Int <- 42, z: SELF_TYPE <- new SELF_TYPE in z;
 			true;
 		}
 	};

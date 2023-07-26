@@ -187,7 +187,11 @@ ExpressionType get_expr_type() { return ExpressionType::Block; }	\
 Expressions get_body() { return body; };
 
 #define let_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Let; }
+ExpressionType get_expr_type() { return ExpressionType::Let; }	\
+Symbol get_let_id() { return identifier; }	\
+Symbol get_let_type_decl() { return type_decl; }	\
+Expression get_let_init() { return init; }	\
+Expression get_let_body() { return body; }	
 
 #define plus_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Plus; }	\
