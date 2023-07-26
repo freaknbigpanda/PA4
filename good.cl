@@ -27,7 +27,7 @@ class A inherits Main {
 };
 
 class Penis inherits A {
-	pp: SELF_TYPE;
+	pp: Object;
 	bbb: Int;
 	ccc: Main;
 	xxx: Int;
@@ -39,6 +39,7 @@ class Penis inherits A {
 			pp <- testAgain(45, true, "hello");
 			ccc <- if true then new Penis else new Penis fi;
 			pp <- let x: Int <- 42, y: Int <- 42, z: SELF_TYPE <- new SELF_TYPE in z;
+			pp <- case new Main of yyy : Main => yyy; ooo : Object => ooo; esac;
 			true;
 		}
 	};

@@ -834,6 +834,58 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             typeEnvironment.ExitScope();
             break;
         }
+        case ExpressionType::TypeCase:
+        {
+            typcase_class* typecaseExpr = static_cast<typcase_class*>(expression);
+            Cases cases = typecaseExpr->get_cases();
+            Expression caseExpr = typecaseExpr->get_case_expr();
+
+            Symbol caseExprType = TypeCheckExpression(typeEnvironment, caseExpr); 
+            Symbol lastBranchExprType = nullptr;
+            for(int i = cases->first(); cases->more(i); i = cases->next(i))
+            {
+                Case caseObj = cases->nth(i);
+                branch_class* caseBranch = static_cast<branch_class*>(caseObj);
+
+                Symbol idName = caseBranch->get_name();
+                Symbol typeDecl = caseBranch->get_type();
+                if (typeDecl == SELF_TYPE) typeDecl = typeEnvironment.m_currentClass->get_name();
+                Expression branchExpr = caseBranch->get_expr(); 
+                
+                // todo: apparently there is no requirement to test this but I don't see how the
+                //  case statement makes sense otherwise
+                if (IsClassChildOfClassOrEqual(caseExprType, typeDecl, typeEnvironment) == false)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), branchExpr);
+                    error_stream << "Case branch id declared type is not a parent type of " << caseExprType->get_string() << endl;
+                    return nullptr;
+                }
+
+                typeEnvironment.EnterScope(); // case scope
+
+                typeEnvironment.m_symbols.addid(idName->get_string(), typeDecl);
+                Symbol currentBranchExprType = TypeCheckExpression(typeEnvironment, branchExpr);
+
+                if (lastBranchExprType != nullptr) {
+                    // find the first common ancestor
+                    const InheritanceNode* lastTypeNode = m_inheritanceNodeMap[lastBranchExprType->get_string()].get();
+                    const InheritanceNode* currentTypeNode = m_inheritanceNodeMap[currentBranchExprType->get_string()].get();
+                    const InheritanceNode* commonAncestor = lastTypeNode->FirstCommonAncestor(currentTypeNode);
+
+                    expressionType = m_classMap[commonAncestor->GetName()]->get_name();
+                } 
+                else
+                {
+                    expressionType = currentBranchExprType;
+                } 
+
+                lastBranchExprType = currentBranchExprType;
+
+                typeEnvironment.ExitScope();
+            }
+
+            break;
+        }
         case ExpressionType::IntConst:
         {
             expressionType = Int;

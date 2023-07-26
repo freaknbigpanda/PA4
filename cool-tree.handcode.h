@@ -135,7 +135,10 @@ virtual void dump_with_types(ostream& ,int) = 0;
 
 
 #define branch_EXTRAS                                   \
-void dump_with_types(ostream& ,int);
+void dump_with_types(ostream& ,int);	\
+Symbol get_name() { return name; };	\
+Symbol get_type() { return type_decl; }	\
+Expression get_expr() { return expr; }
 
 #define Expression_EXTRAS                    \
 Symbol type;                                 \
@@ -180,7 +183,9 @@ Expression get_else() { return else_exp; }
 ExpressionType get_expr_type() { return ExpressionType::Loop; }
 
 #define typcase_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::TypeCase; }
+ExpressionType get_expr_type() { return ExpressionType::TypeCase; }	\
+Expression get_case_expr() { return expr; }	\
+Cases get_cases() { return cases; }
 
 #define block_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Block; }	\

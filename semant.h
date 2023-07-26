@@ -126,6 +126,8 @@ private:
   ostream& error_stream;
   Classes m_classes;
   InheritanceNodeMap m_inheritanceNodeMap;
+
+  // todo: pretty sure this can be removed if I include Symbol points to class type objects in the InheritanceNodes
   std::map<std::string, Class_> m_classMap; // Used in later passes for quick lookup by class name
 
 public:
