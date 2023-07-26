@@ -48,7 +48,7 @@ enum class ExpressionType: uint8_t {
 	Assign,
 	StaticDispatch,
 	Dispatch,
-	Condition,
+	Conditional,
 	Loop,
 	TypeCase,
 	Block,
@@ -171,7 +171,10 @@ Symbol get_dispatch_method_name() { return name; }	\
 Expressions get_dispatch_param_expressions() { return actual; }
 
 #define cond_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Condition; }
+ExpressionType get_expr_type() { return ExpressionType::Conditional; }	\
+Expression get_pred() { return pred; }	\
+Expression get_then() { return then_exp; }	\
+Expression get_else() { return else_exp; }
 
 #define loop_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Loop; }

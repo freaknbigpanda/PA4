@@ -25,7 +25,7 @@ class InheritanceNode
 public:
     InheritanceNode(const std::string& name) : m_name(name) {};
 
-    const InheritanceNode* FirstCommonAncestor(const InheritanceNode* otherNode, std::string& errorStr) const;
+    const InheritanceNode* FirstCommonAncestor(const InheritanceNode* otherNode) const;
     bool IsChildOfOrEqual(const InheritanceNode* potentialParent) const;
     bool AddChild(InheritanceNode*, std::string&);
     bool HasParent() const { return m_parent != nullptr; } 

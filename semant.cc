@@ -20,7 +20,7 @@ extern char *curr_filename;
 // as fixed names used by the runtime system.
 //
 //////////////////////////////////////////////////////////////////////
-static Symbol 
+static Symbol
     arg,
     arg2,
     Bool,
@@ -65,7 +65,7 @@ static void initialize_constants(void)
     length      = idtable.add_string("length");
     Main        = idtable.add_string("Main");
     main_meth   = idtable.add_string("main");
-    //   _no_class is a symbol that can't be the name of any 
+    //   _no_class is a symbol that can't be the name of any
     //   user-defined class.
     No_class    = idtable.add_string("_no_class");
     No_type     = idtable.add_string("_no_type");
@@ -82,18 +82,15 @@ static void initialize_constants(void)
     val         = idtable.add_string("_val");
 }
 
-const InheritanceNode* InheritanceNode::FirstCommonAncestor(const InheritanceNode* otherNode, std::string& errorString) const
+const InheritanceNode* InheritanceNode::FirstCommonAncestor(const InheritanceNode* otherNode) const
 {
     using namespace std;
 
     if (otherNode == nullptr)
     {
-        std::stringstream stream;
-        stream << "Passed nullptr to lub function" << endl;
-        errorString = stream.str();
         return nullptr;
     }
-    
+
     // First build a map of ancestors for the current node (including the current node itself)
     std::set<std::string> ancestors;
     const InheritanceNode* parent = this;
@@ -111,9 +108,7 @@ const InheritanceNode* InheritanceNode::FirstCommonAncestor(const InheritanceNod
 
         if (otherParent == nullptr)
         {
-            std::stringstream stream;
-            stream << "Class " << otherNode->m_name << " and " << m_name << " have no common ancestor" << endl;
-            errorString = stream.str();
+            abort(); // Sanity check, we shouldn't ever hit this and if we do it means we haven't properly validated the inheritance graph
             return nullptr;
         }
     }
@@ -190,17 +185,17 @@ void ClassTable::install_basic_classes() {
     // The tree package uses these globals to annotate the classes built below.
    // curr_lineno  = 0;
     Symbol filename = stringtable.add_string("<basic class>");
-    
+
     // The following demonstrates how to create dummy parse trees to
     // refer to basic Cool classes.  There's no need for method
     // bodies -- these are already built into the runtime system.
-    
+
     // IMPORTANT: The results of the following expressions are
     // stored in local variables.  You will want to do something
     // with those variables at the end of this method to make this
     // code meaningful.
 
-    // 
+    //
     // The Object class has no parent class. Its methods are
     //        abort() : Object    aborts the program
     //        type_name() : Str   returns a string representation of class name
@@ -212,7 +207,7 @@ void ClassTable::install_basic_classes() {
     // todo: really unfortunate that there is no in place method to append these classes.. as far as I can tell it is copying the whole list to a new list with the appended node
 
     Class_ Object_class =
-	class_(Object, 
+	class_(Object,
 	       No_class,
 	       append_Features(
 			       append_Features(
@@ -222,15 +217,15 @@ void ClassTable::install_basic_classes() {
 	       filename);
     m_classes = append_Classes(m_classes, single_Classes(Object_class));
 
-    // 
+    //
     // The IO class inherits from Object. Its methods are
     //        out_string(Str) : SELF_TYPE       writes a string to the output
     //        out_int(Int) : SELF_TYPE            "    an int    "  "     "
     //        in_string() : Str                 reads a string from the input
     //        in_int() : Int                      "   an int     "  "     "
     //
-    Class_ IO_class = 
-	class_(IO, 
+    Class_ IO_class =
+	class_(IO,
 	       Object,
 	       append_Features(
 			       append_Features(
@@ -246,14 +241,14 @@ void ClassTable::install_basic_classes() {
 
     //
     // The Int class has no methods and only a single attribute, the
-    // "val" for the integer. 
+    // "val" for the integer.
     //
     Class_ Int_class =
-	class_(Int, 
+	class_(Int,
 	       Object,
 	       single_Features(attr(val, prim_slot, no_expr())),
 	       filename);
-    m_classes = append_Classes(m_classes, single_Classes(Int_class));     
+    m_classes = append_Classes(m_classes, single_Classes(Int_class));
 
     //
     // Bool also has only the "val" slot.
@@ -269,9 +264,9 @@ void ClassTable::install_basic_classes() {
     //       length() : Int                       returns length of the string
     //       concat(arg: Str) : Str               performs string concatenation
     //       substr(arg: Int, arg2: Int): Str     substring selection
-    //       
+    //
     Class_ Str_class =
-	class_(Str, 
+	class_(Str,
 	       Object,
 	       append_Features(
 			       append_Features(
@@ -280,14 +275,14 @@ void ClassTable::install_basic_classes() {
 									       single_Features(attr(val, Int, no_expr())),
 									       single_Features(attr(str_field, prim_slot, no_expr()))),
 							       single_Features(method(length, nil_Formals(), Int, no_expr()))),
-					       single_Features(method(concat, 
+					       single_Features(method(concat,
 								      single_Formals(formal(arg, Str)),
-								      Str, 
+								      Str,
 								      no_expr()))),
-			       single_Features(method(substr, 
-						      append_Formals(single_Formals(formal(arg, Int)), 
+			       single_Features(method(substr,
+						      append_Formals(single_Formals(formal(arg, Int)),
 								     single_Formals(formal(arg2, Int))),
-						      Str, 
+						      Str,
 						      no_expr()))),
 	       filename);
     m_classes = append_Classes(m_classes, single_Classes(Str_class));
@@ -296,12 +291,12 @@ void ClassTable::install_basic_classes() {
 bool ClassTable::ValidateInheritance()
 {
     using namespace std;
-    
+
     // Just used to check for multiply defined children
     set<string> allDefinedChildren;
 
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-    { 
+    {
         string parentName = m_classes->nth(i)->get_parent()->get_string();
         string childName = m_classes->nth(i)->get_name()->get_string();
 
@@ -324,7 +319,7 @@ bool ClassTable::ValidateInheritance()
 
         if (parentName == childName)
         {
-            // class inheritis from itself 
+            // class inheritis from itself
             semant_error(m_classes->nth(i));
             error_stream << "Class " << childName << " inherits from itself" << endl;
             continue;
@@ -334,7 +329,7 @@ bool ClassTable::ValidateInheritance()
         if (m_inheritanceNodeMap.find(childName) != m_inheritanceNodeMap.end())
         {
             // Don't need to do anything here if the child already exists
-        } 
+        }
         else
         {
             // create a new child node and add it to the map
@@ -383,7 +378,7 @@ bool ClassTable::ValidateInheritance()
             // Find the child class for this orphaned parent
             bool found = false; // just for sanity check, we should always be able to find the child of the undefined parent
             for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-            { 
+            {
                 if (node->GetName() == m_classes->nth(i)->get_parent()->get_string())
                 {
                     found = true;
@@ -416,7 +411,7 @@ bool ClassTable::ValidateInheritance()
         cout << "The number of classes that we encountred (parent and child) in the ast is " << m_inheritanceNodeMap.size() << endl;
 
         for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-        { 
+        {
             cout << "Parent is:" << endl;
             cout << m_classes->nth(i)->get_parent()->get_string() << endl;
             cout << "Child is:" << endl;
@@ -435,7 +430,7 @@ void ClassTable::CheckTypes()
     // ***** CLASS GATHER PASS ***** //
     // Gather all declared classes in the symbol table
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-    { 
+    {
         Class_ currentClass = m_classes->nth(i);
 
         std::string className = currentClass->get_name()->get_string();
@@ -449,14 +444,14 @@ void ClassTable::CheckTypes()
     // Now gather all methods and their formals in the symbol table
     bool mainDefinedInMain = false;
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-    { 
+    {
         Class_ currentClass = m_classes->nth(i);
         Features features = currentClass->get_features();
         for (int i = features->first(); features->more(i); i = features->next(i))
         {
             Feature feature = features->nth(i);
             if (feature->is_attr()) continue; // we don't care about attributes for this pass
-            
+
             method_class* methodObject = static_cast<method_class*>(feature);
             MethodKey key = MethodKey(currentClass, methodObject);
             // first check to make sure the method has not been previously defined
@@ -485,7 +480,7 @@ void ClassTable::CheckTypes()
                 formalNames.insert(formal->get_name()->get_string());
             }
 
-            if (strcmp(methodObject->get_name()->get_string(), "main") == 0 && 
+            if (strcmp(methodObject->get_name()->get_string(), "main") == 0 &&
                 strcmp(currentClass->get_name()->get_string(), "Main") == 0 &&
                 formalNames.size() == 0)
             {
@@ -502,12 +497,12 @@ void ClassTable::CheckTypes()
         error_stream << "main() method that takes no params must be decalred in Main class" << endl;
     }
 
-    // So the problem is we need to check to make sure that attributes are not re-defined in child classes 
+    // So the problem is we need to check to make sure that attributes are not re-defined in child classes
 
     // ***** METHOD INHERITANCE CHECK PASS ***** //
     // Now check to make sure that methods defined in child classes conform to the appropiate signature
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-    { 
+    {
         Class_ currentClass = m_classes->nth(i);
 
         //todo: This is really unoptimized, we are checking a lot of classes that we don't need to check
@@ -530,7 +525,7 @@ void ClassTable::CheckTypes()
             while (parent != nullptr)
             {
                 MethodKey parentKey = MethodKey(parent->GetName(), methodObject->get_name()->get_string());
-                if (typeEnvironment.m_methodMap.find(parentKey) != typeEnvironment.m_methodMap.end()) 
+                if (typeEnvironment.m_methodMap.find(parentKey) != typeEnvironment.m_methodMap.end())
                 {
                     // We have found a redefinition in a parent class, need to check to make sure that the number and types of formals are the same
                     if (typeEnvironment.m_methodMap[parentKey] != typeEnvironment.m_methodMap[childKey])
@@ -544,10 +539,10 @@ void ClassTable::CheckTypes()
             }
         }
     }
-    
+
     // ***** ATTRIBUTE GATHER & FEATURE TYPE CHECK PASS ***** //
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
-    { 
+    {
         Class_ currentClass = m_classes->nth(i);
         std::string className = currentClass->get_name()->get_string();
 
@@ -586,13 +581,13 @@ void ClassTable::CheckTypes()
                 typeEnvironment.m_symbols.addid(featureName, feature->get_type());
             }
 
-            parentClassNode = parentClassNode->GetParent(); 
+            parentClassNode = parentClassNode->GetParent();
         }
 
         // Now we have a complete list of attributes in our symbol table, continue to type checking
         // todo: test a <- a
         // This works because I gather the attribute types first but I don't know if it should be working
-        
+
         // Feature type checking
         Features features = currentClass->get_features();
         for (int i = features->first(); features->more(i); i = features->next(i))
@@ -612,10 +607,10 @@ void ClassTable::CheckTypes()
                     typeEnvironment.m_symbols.addid(formal->get_name()->get_string(), formal->get_type());
                 }
             }
-            
+
             //Recursively type check the expression if it is not NoExpr class
             Expression expression = feature->get_expression();
-            if (expression->get_expr_type() != ExpressionType::NoExpr) 
+            if (expression->get_expr_type() != ExpressionType::NoExpr)
             {
                 Symbol expressionType = TypeCheckExpression(typeEnvironment, expression);
 
@@ -669,7 +664,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             // The assign expression is accepted as long as it assigning a subclass of the declared identifier type
             Symbol parentType = typeEnvironment.m_symbols.lookup(name->get_string());
-            if (IsClassChildOfClassOrEqual(exprType, parentType, typeEnvironment) == false) 
+            if (IsClassChildOfClassOrEqual(exprType, parentType, typeEnvironment) == false)
             {
                 semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
                 error_stream << "Assignment expression has a static type that does not match the identifier, or the identifier type is unknown" << endl;
@@ -693,6 +688,30 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             //typeEnvironment.ExitScope();
             break;
         }
+        case ExpressionType::Conditional:
+        {
+            cond_class* conditional = static_cast<cond_class*>(expression);
+            Symbol predType = TypeCheckExpression(typeEnvironment, conditional->get_pred());
+
+            // todo: test
+            if (predType->get_string() != Bool->get_string())
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                error_stream << "Conditional statement predicate must be of static type Boolean" << endl;
+                break;
+            }
+
+            Symbol thenType = TypeCheckExpression(typeEnvironment, conditional->get_then());
+            Symbol elseType = TypeCheckExpression(typeEnvironment, conditional->get_else());
+
+            const InheritanceNode* thenTypeNode = m_inheritanceNodeMap[thenType->get_string()].get();
+            const InheritanceNode* elseTypeNode = m_inheritanceNodeMap[elseType->get_string()].get();
+
+            const InheritanceNode* commonAncestor = thenTypeNode->FirstCommonAncestor(elseTypeNode);
+            expressionType = m_classMap[commonAncestor->GetName()]->get_name();
+
+            break;
+        }
         case ExpressionType::Dispatch:
         case ExpressionType::StaticDispatch:
         {
@@ -714,16 +733,16 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             }
 
             Symbol baseClassType = isStaticDispatch ? subclassName : identifierExprType;
-            
+
             // Then check to make sure that a method with that name exists on the class or its parents
             bool methodFound = false;
             MethodInfo foundMethodInfo;
             while (baseClassType != nullptr)
             {
-                MethodKey methodKey = MethodKey(baseClassType->get_string(), 
+                MethodKey methodKey = MethodKey(baseClassType->get_string(),
                     expression->get_dispatch_method_name()->get_string());
                 if (typeEnvironment.m_methodMap.find(methodKey) != typeEnvironment.m_methodMap.end())
-                {  
+                {
                     foundMethodInfo = typeEnvironment.m_methodMap[methodKey];
                     methodFound = true;
                     break;
@@ -809,7 +828,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             if (symbolName == self->get_string())
             {
                 expressionType = typeEnvironment.m_currentClass->get_name();
-            } 
+            }
             else
             {
                 expressionType = typeEnvironment.m_symbols.lookup(symbolName);
@@ -883,20 +902,20 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 // semant_error is an overloaded function for reporting errors
 // during semantic analysis.  There are three versions:
 //
-//    ostream& ClassTable::semant_error()                
+//    ostream& ClassTable::semant_error()
 //
 //    ostream& ClassTable::semant_error(Class_ c)
 //       print line number and filename for `c'
 //
-//    ostream& ClassTable::semant_error(Symbol filename, tree_node *t)  
+//    ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
 //       print a line number and filename
 //
 ///////////////////////////////////////////////////////////////////
 
 ostream& ClassTable::semant_error(Class_ c)
-{                                                             
+{
     return semant_error(c->get_filename(),c);
-}    
+}
 
 ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
 {
@@ -904,11 +923,11 @@ ostream& ClassTable::semant_error(Symbol filename, tree_node *t)
     return semant_error();
 }
 
-ostream& ClassTable::semant_error()                  
-{                                                 
-    semant_errors++;                            
+ostream& ClassTable::semant_error()
+{
+    semant_errors++;
     return error_stream;
-} 
+}
 
 
 
