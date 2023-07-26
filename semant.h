@@ -120,7 +120,6 @@ private:
   ostream& error_stream;
   Classes m_classes;
   InheritanceNodeMap m_inheritanceNodeMap;
-  std::map<std::string, Class_> m_classMap;
 
 public:
   ClassTable(Classes);

@@ -434,6 +434,7 @@ void ClassTable::CheckTypes()
 
     // ***** CLASS GATHER PASS ***** //
     // Gather all declared classes in the symbol table
+    std::map<std::string, Class_> classMap; // Used in later passes for quick lookup by class name
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         Class_ currentClass = m_classes->nth(i);
@@ -442,7 +443,7 @@ void ClassTable::CheckTypes()
         typeEnvironment.m_symbols.addid(className, currentClass->get_name());
 
         // populate the class map for use later
-        m_classMap[className] = currentClass;
+        classMap[className] = currentClass;
     }
 
     // ***** METHOD GATHER PASS ***** //
@@ -498,15 +499,23 @@ void ClassTable::CheckTypes()
 
     if (mainDefinedInMain == false)
     {
-        semant_error(m_classMap["Main"]);
+        semant_error(classMap["Main"]);
         error_stream << "main() method that takes no params must be decalred in Main class" << endl;
     }
+
+    // So the problem is we need to check to make sure that attributes are not re-defined in child classes 
 
     // ***** METHOD INHERITANCE CHECK PASS ***** //
     // Now check to make sure that methods defined in child classes conform to the appropiate signature
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         Class_ currentClass = m_classes->nth(i);
+
+        //todo: This is really unoptimized, we are checking a lot of classes that we don't need to check
+        // for example if we have the inheritance relation A -> B -> C -> D and we first check D then
+        // we will have checked the entire inheritance tree already but when we encounter C we will still check
+        // all of the classes A, B, C. We will end up with a lot of duplicated work for deep hierarchies.
+        // I think I can just add some visited metadata to avoid this duplicated work
 
         // Check to see if the method is improperly redefined in child classes
         std::string className = currentClass->get_name()->get_string();
@@ -546,27 +555,39 @@ void ClassTable::CheckTypes()
         typeEnvironment.EnterScope();
         typeEnvironment.m_currentClass = currentClass;
 
-        // Atrribute gather and dedupe
-        Features features = currentClass->get_features();
-        for (int i = features->first(); features->more(i); i = features->next(i))
-        {
-            Feature feature = features->nth(i);
-            // Only gathering attributes here
-            if (feature->is_attr() == false) continue;
-
-            std::string featureName = feature->get_name()->get_string();
-
-            // First make sure that the attribute is not previously defined, note that we have already done this for methods previously
-            if (typeEnvironment.m_symbols.probe(featureName) != nullptr)
-            {
-                // Attribute with same name defined twice - continue to next attribute
-                semant_error(typeEnvironment.m_currentClass->get_filename(), feature);
-                error_stream << "Attribute defined twice in the same class." << endl;
-                continue;
+        // For each class hierarchy loop through all the parent classes and add their attributes to the symbol table
+        //  while checking to see if they are defined twice
+        const InheritanceNode* parentClassNode = m_inheritanceNodeMap[className].get();
+        while (parentClassNode != nullptr && parentClassNode->GetName() !=  No_class->get_string()) {
+            Class_ parentClass = classMap[parentClassNode->GetName()];
+            if (parentClass == nullptr) {
+                abort(); // Just for debug, this should never happen
             }
 
-            // Attribute not previously defined so we can add it to the symbol table
-            typeEnvironment.m_symbols.addid(featureName, feature->get_type());
+            // Atrribute gather and dedupe
+            Features features = parentClass->get_features();
+            for (int i = features->first(); features->more(i); i = features->next(i))
+            {
+                Feature feature = features->nth(i);
+                // Only gathering attributes here
+                if (feature->is_attr() == false) continue;
+
+                std::string featureName = feature->get_name()->get_string();
+
+                // First make sure that the attribute is not previously defined, note that we have already done this for methods previously
+                if (typeEnvironment.m_symbols.probe(featureName) != nullptr)
+                {
+                    // Attribute with same name defined twice - continue to next attribute
+                    semant_error(parentClass->get_filename(), feature);
+                    error_stream << "Attribute redefined in the same class or class hierarchy." << endl;
+                    continue;
+                }
+
+                // Attribute not previously defined so we can add it to the symbol table
+                typeEnvironment.m_symbols.addid(featureName, feature->get_type());
+            }
+
+            parentClassNode = parentClassNode->GetParent(); 
         }
 
         // Now we have a complete list of attributes in our symbol table, continue to type checking
@@ -574,6 +595,7 @@ void ClassTable::CheckTypes()
         // This works because I gather the attribute types first but I don't know if it should be working
         
         // Feature type checking
+        Features features = currentClass->get_features();
         for (int i = features->first(); features->more(i); i = features->next(i))
         {
             Feature feature = features->nth(i);
@@ -616,6 +638,10 @@ void ClassTable::CheckTypes()
 
 bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass)
 {
+    if (childClass == nullptr || potentialParentClass == nullptr) {
+        return false;
+    }
+
     InheritanceNode* childNode = m_inheritanceNodeMap[childClass->get_string()].get();
     InheritanceNode* parentNode = m_inheritanceNodeMap[potentialParentClass->get_string()].get();
 
