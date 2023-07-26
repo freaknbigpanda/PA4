@@ -137,7 +137,6 @@ virtual void dump_with_types(ostream& ,int) = 0;
 #define branch_EXTRAS                                   \
 void dump_with_types(ostream& ,int);
 
-//todo: I don't like how the get_lhs and rhs functions are here, because it doesn't apply to all expressions
 #define Expression_EXTRAS                    \
 Symbol type;                                 \
 Symbol get_type() { return type; }           \
@@ -146,8 +145,12 @@ virtual void dump_with_types(ostream&,int) = 0;  \
 void dump_type(ostream&, int);               \
 Expression_class() { type = (Symbol) NULL; } \
 virtual ExpressionType get_expr_type() = 0;	\
-virtual Expression get_lhs() { return nullptr; } \
-virtual Expression get_rhs() { return nullptr; }
+/* For binary operators */virtual Expression get_lhs() { return nullptr; } \
+/* For binary operators */virtual Expression get_rhs() { return nullptr; }	\
+/* For dispatch */virtual Expression get_dispatch_id_expr() { return nullptr; }	\
+/* For dispatch */virtual Symbol get_dispatch_method_name() { return nullptr; }	\
+/* For dispatch */virtual Expressions get_dispatch_param_expressions() { return nullptr; }	\
+/* For dispatch */virtual Symbol get_dispatch_subclass_type() { return nullptr; }
 
 #define assign_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Assign; }	\
@@ -156,16 +159,16 @@ Expression get_expr() { return expr; }
 
 #define static_dispatch_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::StaticDispatch; }	\
-Expression get_identifer_dispatch_expr() { return expr; }	\
-Symbol get_method_name() { return name; }	\
-Expressions get_formal_expressions() { return actual; }	\
-Symbol get_subclass_type() { return type_name; }
+Expression get_dispatch_id_expr() { return expr; }	\
+Symbol get_dispatch_method_name() { return name; }	\
+Expressions get_dispatch_param_expressions() { return actual; }	\
+Symbol get_dispatch_subclass_type() { return type_name; }
 
 #define dispatch_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Dispatch; }	\
-Expression get_identifer_dispatch_expr() { return expr; }	\
-Symbol get_method_name() { return name; }	\
-Expressions get_formal_expressions() { return actual; }
+Expression get_dispatch_id_expr() { return expr; }	\
+Symbol get_dispatch_method_name() { return name; }	\
+Expressions get_dispatch_param_expressions() { return actual; }
 
 #define cond_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Condition; }

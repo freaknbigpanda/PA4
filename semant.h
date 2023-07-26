@@ -126,6 +126,7 @@ private:
   ostream& error_stream;
   Classes m_classes;
   InheritanceNodeMap m_inheritanceNodeMap;
+  std::map<std::string, Class_> m_classMap; // Used in later passes for quick lookup by class name
 
 public:
   ClassTable(Classes);

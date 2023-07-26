@@ -434,7 +434,6 @@ void ClassTable::CheckTypes()
 
     // ***** CLASS GATHER PASS ***** //
     // Gather all declared classes in the symbol table
-    std::map<std::string, Class_> classMap; // Used in later passes for quick lookup by class name
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     { 
         Class_ currentClass = m_classes->nth(i);
@@ -443,7 +442,7 @@ void ClassTable::CheckTypes()
         typeEnvironment.m_symbols.addid(className, currentClass->get_name());
 
         // populate the class map for use later
-        classMap[className] = currentClass;
+        m_classMap[className] = currentClass;
     }
 
     // ***** METHOD GATHER PASS ***** //
@@ -499,7 +498,7 @@ void ClassTable::CheckTypes()
 
     if (mainDefinedInMain == false)
     {
-        semant_error(classMap["Main"]);
+        semant_error(m_classMap["Main"]);
         error_stream << "main() method that takes no params must be decalred in Main class" << endl;
     }
 
@@ -559,7 +558,7 @@ void ClassTable::CheckTypes()
         //  while checking to see if they are defined twice
         const InheritanceNode* parentClassNode = m_inheritanceNodeMap[className].get();
         while (parentClassNode != nullptr && parentClassNode->GetName() !=  No_class->get_string()) {
-            Class_ parentClass = classMap[parentClassNode->GetName()];
+            Class_ parentClass = m_classMap[parentClassNode->GetName()];
             if (parentClass == nullptr) {
                 abort(); // Just for debug, this should never happen
             }
@@ -695,41 +694,57 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             break;
         }
         case ExpressionType::Dispatch:
+        case ExpressionType::StaticDispatch:
         {
             // <expr>.<id>(<expr>,...,<expr>)
             // <id>(<expr>,...,<expr>) aka self.<id>(<expr>,...,<expr>)
-
-        }
-        case ExpressionType::StaticDispatch:
-        {
             // <expr>@<type>.id(<expr>,...,<expr>)
 
-            static_dispatch_class* static_dispatch_expr = static_cast<static_dispatch_class*>(expression);
+            Symbol identifierExprType = TypeCheckExpression(typeEnvironment, expression->get_dispatch_id_expr());
+            Symbol subclassName = expression->get_dispatch_subclass_type();
 
-            Symbol identifierExprType = TypeCheckExpression(typeEnvironment, static_dispatch_expr->get_identifer_dispatch_expr());
-            Symbol subclassName = static_dispatch_expr->get_subclass_type();
+            bool isStaticDispatch = subclassName != nullptr;
 
             // First check to make sure that the static type of the expr conforms to the subclass type we are dispatching too
-            if (IsClassChildOfClassOrEqual(identifierExprType, subclassName, typeEnvironment) == false)
+            if (isStaticDispatch && IsClassChildOfClassOrEqual(identifierExprType, subclassName, typeEnvironment) == false)
             {
-                semant_error(typeEnvironment.m_currentClass->get_filename(), static_dispatch_expr);
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
                 error_stream << "The dispatch expression static type of " << identifierExprType->get_string() << " is not a subclass of " << subclassName->get_string() << endl;
                 return nullptr;
             }
 
-            MethodKey methodKey = MethodKey(static_dispatch_expr->get_subclass_type()->get_string(), 
-                static_dispatch_expr->get_method_name()->get_string());
-
-            // Then check to make sure that a method with that name exists on the class
-            if (typeEnvironment.m_methodMap.find(methodKey) == typeEnvironment.m_methodMap.end())
+            Symbol baseClassType = isStaticDispatch ? subclassName : identifierExprType;
+            
+            // Then check to make sure that a method with that name exists on the class or its parents
+            bool methodFound = false;
+            MethodInfo foundMethodInfo;
+            while (baseClassType != nullptr)
             {
-                semant_error(typeEnvironment.m_currentClass->get_filename(), static_dispatch_expr);
-                error_stream << "Tried to call method with static dispatch that was not defined in the specified class" << endl;
+                MethodKey methodKey = MethodKey(baseClassType->get_string(), 
+                    expression->get_dispatch_method_name()->get_string());
+                if (typeEnvironment.m_methodMap.find(methodKey) != typeEnvironment.m_methodMap.end())
+                {  
+                    foundMethodInfo = typeEnvironment.m_methodMap[methodKey];
+                    methodFound = true;
+                    break;
+                }
+                const InheritanceNode* parentNode = m_inheritanceNodeMap[baseClassType->get_string()]->GetParent();
+                std::string parentClassName = parentNode->GetName();
+
+                if (parentClassName == No_class->get_string()) break; // reached the top of the inheritance hierarchy
+
+                baseClassType = m_classMap[parentClassName]->get_name();
+            }
+
+            if (methodFound == false)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                error_stream << "Tried to call method that was not defined in the specified class hierarchy" << endl;
                 return nullptr;
             }
 
             // Then gather all of the method formal types
-            Expressions formalExpressions = static_dispatch_expr->get_formal_expressions();
+            Expressions formalExpressions = expression->get_dispatch_param_expressions();
             std::vector<Symbol> formalExpressionTypes;
             for(int i = formalExpressions->first(); formalExpressions->more(i); i = formalExpressions->next(i))
             {
@@ -745,22 +760,21 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             }
 
             // Finally test to make sure that the formals and return types match
-            MethodInfo goldenMethodInfo = typeEnvironment.m_methodMap[methodKey];
-            MethodInfo dispatchMethodInfo = MethodInfo(goldenMethodInfo.GetReturnType(), formalExpressionTypes);
-            if (goldenMethodInfo != dispatchMethodInfo)
+            MethodInfo dispatchMethodInfo = MethodInfo(foundMethodInfo.GetReturnType(), formalExpressionTypes);
+            if (foundMethodInfo != dispatchMethodInfo)
             {
-                semant_error(typeEnvironment.m_currentClass->get_filename(), static_dispatch_expr);
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
                 error_stream << "Method signature in dispatch expression does not match declartion" << endl;
             }
 
             // Handle self_type
-            if (goldenMethodInfo.GetReturnType() == SELF_TYPE)
+            if (foundMethodInfo.GetReturnType() == SELF_TYPE)
             {
                 expressionType = identifierExprType;
             }
             else
             {
-                expressionType = goldenMethodInfo.GetReturnType();
+                expressionType = foundMethodInfo.GetReturnType();
             }
             break;
         }
@@ -791,11 +805,19 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
         case ExpressionType::Object:
         {
             std::string symbolName = static_cast<object_class*>(expression)->get_name()->get_string();
-            expressionType = typeEnvironment.m_symbols.lookup(symbolName);
-            if (expressionType == nullptr)
+
+            if (symbolName == self->get_string())
             {
-                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
-                error_stream << "Identifier not defined in this scope" << endl;
+                expressionType = typeEnvironment.m_currentClass->get_name();
+            } 
+            else
+            {
+                expressionType = typeEnvironment.m_symbols.lookup(symbolName);
+                if (expressionType == nullptr)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                    error_stream << "Identifier not defined in this scope" << endl;
+                }
             }
             break;
         }
