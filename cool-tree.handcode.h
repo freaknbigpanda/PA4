@@ -180,7 +180,9 @@ Expression get_then() { return then_exp; }	\
 Expression get_else() { return else_exp; }
 
 #define loop_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Loop; }
+ExpressionType get_expr_type() { return ExpressionType::Loop; } \
+Expression get_pred() { return pred; }	\
+Expression get_body() { return body; }
 
 #define typcase_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::TypeCase; }	\
@@ -219,7 +221,8 @@ Expression get_lhs() { return e1; } \
 Expression get_rhs() { return e2; }
 
 #define neg_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Neg; }
+ExpressionType get_expr_type() { return ExpressionType::Neg; }	\
+Expression get_lhs() { return e1; }
 
 #define lt_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Lt; }	\
@@ -237,7 +240,8 @@ Expression get_lhs() { return e1; } \
 Expression get_rhs() { return e2; }
 
 #define comp_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::Comp; }
+ExpressionType get_expr_type() { return ExpressionType::Comp; } \
+Expression get_rhs() { return e1; } \
 
 #define int_const_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::IntConst; }
@@ -253,7 +257,8 @@ ExpressionType get_expr_type() { return ExpressionType::New; } \
 Symbol get_type_name() { return type_name; }
 
 #define isvoid_EXTRAS	\
-ExpressionType get_expr_type() { return ExpressionType::IsVoid; }
+ExpressionType get_expr_type() { return ExpressionType::IsVoid; }	\
+Expression get_rhs() { return e1; }
 
 #define no_expr_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::NoExpr; }

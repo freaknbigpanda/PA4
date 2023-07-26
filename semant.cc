@@ -886,6 +886,60 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             break;
         }
+        case ExpressionType::Loop:
+        {
+            loop_class* loopExpr = static_cast<loop_class*>(expression);
+            Expression loopPred = loopExpr->get_pred();
+            Expression loopBody = loopExpr->get_body();
+
+            if (TypeCheckExpression(typeEnvironment, loopPred) != Bool)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), loopExpr);
+                error_stream << "Loop predicate must be of type Bool" << endl;
+            }
+            else if (TypeCheckExpression(typeEnvironment, loopBody) != nullptr)
+            {
+                expressionType = Object;
+            }
+            break;
+        }
+        case ExpressionType::IsVoid:
+        {
+            if (TypeCheckExpression(typeEnvironment, expression->get_rhs()) != nullptr)
+            {
+                expressionType = Bool;
+            }
+
+            break;
+        }
+        case ExpressionType::Comp:
+        {
+            if (TypeCheckExpression(typeEnvironment, expression->get_rhs()) != Bool)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression->get_rhs());
+                error_stream << "not operator only takes expressions of type Bool" << endl;
+            }
+            else
+            {
+                expressionType = Bool;
+            }
+
+            break;
+        }
+        case ExpressionType::Neg:
+        {
+            if (TypeCheckExpression(typeEnvironment, expression->get_rhs()) != Int)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression->get_rhs());
+                error_stream << "neg operator only takes expressions of type Int" << endl;
+            }
+            else
+            {
+                expressionType = Int;
+            }
+
+            break;
+        }
         case ExpressionType::IntConst:
         {
             expressionType = Int;
@@ -930,7 +984,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                 {
                     semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
                     error_stream << "Comparison can only be made between two basic types" << endl;
-                    break;
+                    return nullptr;
                 }
                 expressionType = Bool;
             }

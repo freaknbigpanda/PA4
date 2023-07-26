@@ -32,6 +32,7 @@ class Penis inherits A {
 	ccc: Main;
 	xxx: Int;
 	z: Bool <- true;
+	asdasdk: Bool <- not false;
 	test(): Bool {
 		{
 			aaa <- true;
@@ -40,6 +41,7 @@ class Penis inherits A {
 			ccc <- if true then new Penis else new Penis fi;
 			pp <- let x: Int <- 42, y: Int <- 42, z: SELF_TYPE <- new SELF_TYPE in z;
 			pp <- case new Main of yyy : Main => yyy; ooo : Object => ooo; esac;
+			pp <- while true loop 42 pool;
 			true;
 		}
 	};
