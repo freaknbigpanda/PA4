@@ -620,7 +620,8 @@ void ClassTable::CheckTypes()
             {
                 Symbol expressionType = TypeCheckExpression(typeEnvironment, expression);
 
-                if (expressionType == nullptr || IsClassChildOfClassOrEqual(expressionType, feature->get_type()) == false)
+                Symbol featureType = feature->get_type();
+                if (expressionType == nullptr || IsClassChildOfClassOrEqual(expressionType, featureType, typeEnvironment) == false)
                 {
                     semant_error(typeEnvironment.m_currentClass->get_filename(), feature);
                     std::string errorString = feature->is_attr() ? "Attribute initialization type mismatch" : "Method expression and return type mismatch";
@@ -636,8 +637,12 @@ void ClassTable::CheckTypes()
     }
 }
 
-bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass)
+bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass, const TypeEnvironment& typeEnvironment)
 {
+    if (potentialParentClass == SELF_TYPE) {
+        potentialParentClass = typeEnvironment.m_currentClass->get_name();
+    }
+
     if (childClass == nullptr || potentialParentClass == nullptr) {
         return false;
     }
@@ -665,7 +670,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             // The assign expression is accepted as long as it assigning a subclass of the declared identifier type
             Symbol parentType = typeEnvironment.m_symbols.lookup(name->get_string());
-            if (IsClassChildOfClassOrEqual(exprType, parentType) == false) 
+            if (IsClassChildOfClassOrEqual(exprType, parentType, typeEnvironment) == false) 
             {
                 semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
                 error_stream << "Assignment expression has a static type that does not match the identifier, or the identifier type is unknown" << endl;
@@ -689,17 +694,74 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             //typeEnvironment.ExitScope();
             break;
         }
-        case ExpressionType::StaticDispatch:
+        case ExpressionType::Dispatch:
         {
             // <expr>.<id>(<expr>,...,<expr>)
             // <id>(<expr>,...,<expr>) aka self.<id>(<expr>,...,<expr>)
+
+        }
+        case ExpressionType::StaticDispatch:
+        {
             // <expr>@<type>.id(<expr>,...,<expr>)
 
-            // First build a method info object and see it if matches what we have in the typeEnvironment
             static_dispatch_class* static_dispatch_expr = static_cast<static_dispatch_class*>(expression);
-            Symbol subclassName = static_dispatch_expr->get_subclass_type();
-            
 
+            Symbol identifierExprType = TypeCheckExpression(typeEnvironment, static_dispatch_expr->get_identifer_dispatch_expr());
+            Symbol subclassName = static_dispatch_expr->get_subclass_type();
+
+            // First check to make sure that the static type of the expr conforms to the subclass type we are dispatching too
+            if (IsClassChildOfClassOrEqual(identifierExprType, subclassName, typeEnvironment) == false)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), static_dispatch_expr);
+                error_stream << "The dispatch expression static type of " << identifierExprType->get_string() << " is not a subclass of " << subclassName->get_string() << endl;
+                return nullptr;
+            }
+
+            MethodKey methodKey = MethodKey(static_dispatch_expr->get_subclass_type()->get_string(), 
+                static_dispatch_expr->get_method_name()->get_string());
+
+            // Then check to make sure that a method with that name exists on the class
+            if (typeEnvironment.m_methodMap.find(methodKey) == typeEnvironment.m_methodMap.end())
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), static_dispatch_expr);
+                error_stream << "Tried to call method with static dispatch that was not defined in the specified class" << endl;
+                return nullptr;
+            }
+
+            // Then gather all of the method formal types
+            Expressions formalExpressions = static_dispatch_expr->get_formal_expressions();
+            std::vector<Symbol> formalExpressionTypes;
+            for(int i = formalExpressions->first(); formalExpressions->more(i); i = formalExpressions->next(i))
+            {
+                Expression formalExpression = formalExpressions->nth(i);
+                Symbol formalExpressionType = TypeCheckExpression(typeEnvironment, formalExpression);
+                if (formalExpressionType == nullptr)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), formalExpression);
+                    error_stream << "Formal has unknown type in dispatch expression" << endl;
+                    return nullptr;
+                }
+                formalExpressionTypes.push_back(formalExpressionType);
+            }
+
+            // Finally test to make sure that the formals and return types match
+            MethodInfo goldenMethodInfo = typeEnvironment.m_methodMap[methodKey];
+            MethodInfo dispatchMethodInfo = MethodInfo(goldenMethodInfo.GetReturnType(), formalExpressionTypes);
+            if (goldenMethodInfo != dispatchMethodInfo)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), static_dispatch_expr);
+                error_stream << "Method signature in dispatch expression does not match declartion" << endl;
+            }
+
+            // Handle self_type
+            if (goldenMethodInfo.GetReturnType() == SELF_TYPE)
+            {
+                expressionType = identifierExprType;
+            }
+            else
+            {
+                expressionType = goldenMethodInfo.GetReturnType();
+            }
             break;
         }
         case ExpressionType::New:
@@ -709,7 +771,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             {
                 expressionType = typeEnvironment.m_currentClass->get_name();
             }
-            
             break;
         }
         case ExpressionType::IntConst:

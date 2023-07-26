@@ -12,6 +12,7 @@
 #include <map>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #define TRUE 1
 #define FALSE 0
@@ -41,30 +42,35 @@ private:
     bool m_visited = false;
 };
 
-struct MethodInfo {
+class MethodInfo {
+public:
   MethodInfo() = default;
   MethodInfo(const MethodInfo& other) = default;
-  MethodInfo(method_class* methodObject): 
-    m_formals(methodObject->get_formals()), m_returnType(methodObject->get_type()) {}
+  MethodInfo(Symbol returnType, const std::vector<Symbol>& formalTypes): m_returnType(returnType), m_formalTypes(formalTypes) {}
+  MethodInfo(method_class* methodObject)
+  {
+    m_returnType = methodObject->get_type();
 
-  
-  Formals m_formals = nullptr;
-  Symbol m_returnType = nullptr;
+    Formals formals = methodObject->get_formals();
+    for(int i = formals->first(); formals->more(i); i = formals->next(i))
+    { 
+      m_formalTypes.push_back(formals->nth(i)->get_type());
+    }
+  }
+
+  Symbol GetReturnType() const { return m_returnType; }
 
   bool operator ==(const MethodInfo& other) const {
-    for(int i = m_formals->first(); m_formals->more(i); i = m_formals->next(i))
-    { 
-        if (other.m_formals->nth(i) == nullptr || m_formals->nth(i)->get_type() != other.m_formals->nth(i)->get_type())
-        {
-          return false;
-        }
-    }
-    return m_returnType == other.m_returnType;
+    return m_returnType == other.m_returnType && m_formalTypes == other.m_formalTypes;
   }
 
   bool operator !=(const MethodInfo& other) const {
     return !(*this == other);
   }
+
+private:
+  Symbol m_returnType = nullptr;
+  std::vector<Symbol> m_formalTypes;
 };
 
 // class to store a unqiue method key
@@ -114,7 +120,7 @@ private:
   void install_basic_classes();
   bool ValidateInheritance();
   void CheckTypes();
-  bool IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass);
+  bool IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass, const TypeEnvironment& typeEnvironment);
   Symbol TypeCheckExpression(TypeEnvironment& typeEnvironment, Expression expression);
 
   ostream& error_stream;

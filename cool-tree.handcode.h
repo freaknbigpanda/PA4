@@ -137,7 +137,7 @@ virtual void dump_with_types(ostream& ,int) = 0;
 #define branch_EXTRAS                                   \
 void dump_with_types(ostream& ,int);
 
-
+//todo: I don't like how the get_lhs and rhs functions are here, because it doesn't apply to all expressions
 #define Expression_EXTRAS                    \
 Symbol type;                                 \
 Symbol get_type() { return type; }           \
