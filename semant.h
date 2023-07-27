@@ -59,6 +59,7 @@ public:
   }
 
   Symbol GetReturnType() const { return m_returnType; }
+  const std::vector<Symbol> GetFormalTypes() const { return m_formalTypes; }
 
   bool operator ==(const MethodInfo& other) const {
     return m_returnType == other.m_returnType && m_formalTypes == other.m_formalTypes;
@@ -130,6 +131,7 @@ private:
   // todo: pretty sure this can be removed if I include Symbol points to class type objects in the InheritanceNodes
   std::map<std::string, Class_> m_classMap; // Used in later passes for quick lookup by class name
 
+  Symbol m_basicClassFilename;
 public:
   ClassTable(Classes);
   int errors() { return semant_errors; }

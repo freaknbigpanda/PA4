@@ -174,17 +174,13 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr),
     {
         CheckTypes();
     }
-    else
-    {
-        error_stream << "Inheritance graph is messed up" << endl;
-    }
 }
 
 void ClassTable::install_basic_classes() {
 
     // The tree package uses these globals to annotate the classes built below.
    // curr_lineno  = 0;
-    Symbol filename = stringtable.add_string("<basic class>");
+    m_basicClassFilename = stringtable.add_string("<basic class>");
 
     // The following demonstrates how to create dummy parse trees to
     // refer to basic Cool classes.  There's no need for method
@@ -214,7 +210,7 @@ void ClassTable::install_basic_classes() {
 					       single_Features(method(cool_abort, nil_Formals(), Object, no_expr())),
 					       single_Features(method(type_name, nil_Formals(), Str, no_expr()))),
 			       single_Features(method(copy, nil_Formals(), SELF_TYPE, no_expr()))),
-	       filename);
+	       m_basicClassFilename);
     m_classes = append_Classes(m_classes, single_Classes(Object_class));
 
     //
@@ -236,7 +232,7 @@ void ClassTable::install_basic_classes() {
 										      SELF_TYPE, no_expr()))),
 					       single_Features(method(in_string, nil_Formals(), Str, no_expr()))),
 			       single_Features(method(in_int, nil_Formals(), Int, no_expr()))),
-	       filename);
+	       m_basicClassFilename);
     m_classes = append_Classes(m_classes, single_Classes(IO_class));
 
     //
@@ -247,14 +243,14 @@ void ClassTable::install_basic_classes() {
 	class_(Int,
 	       Object,
 	       single_Features(attr(val, prim_slot, no_expr())),
-	       filename);
+	       m_basicClassFilename);
     m_classes = append_Classes(m_classes, single_Classes(Int_class));
 
     //
     // Bool also has only the "val" slot.
     //
     Class_ Bool_class =
-	class_(Bool, Object, single_Features(attr(val, prim_slot, no_expr())),filename);
+	class_(Bool, Object, single_Features(attr(val, prim_slot, no_expr())),m_basicClassFilename);
     m_classes = append_Classes(m_classes, single_Classes(Bool_class));
 
     //
@@ -284,7 +280,7 @@ void ClassTable::install_basic_classes() {
 								     single_Formals(formal(arg2, Int))),
 						      Str,
 						      no_expr()))),
-	       filename);
+	       m_basicClassFilename);
     m_classes = append_Classes(m_classes, single_Classes(Str_class));
 }
 
@@ -293,7 +289,7 @@ bool ClassTable::ValidateInheritance()
     using namespace std;
 
     // Just used to check for multiply defined children
-    set<string> allDefinedChildren;
+    map<string, Class_> allDefinedChildren;
 
     for(int i = m_classes->first(); m_classes->more(i); i = m_classes->next(i))
     {
@@ -308,14 +304,22 @@ bool ClassTable::ValidateInheritance()
             continue;
         }
 
-        auto insertResult = allDefinedChildren.insert(childName);
-        if (insertResult.second == false)
+        auto insertResult = allDefinedChildren.find(childName);
+        if (insertResult != allDefinedChildren.end())
         {
+            Class_ errorClass = m_classes->nth(i);
+            // if we have incorrectly redefined a basic class report the user implemented version as incorrect
+            if (strcmp(errorClass->get_filename()->get_string(), m_basicClassFilename->get_string()) == 0)
+            {
+                errorClass = insertResult->second;
+            }
+
             // class is defined multiple times
-            semant_error(m_classes->nth(i));
+            semant_error(errorClass);
             error_stream << "Class " << childName << " multiply defined" << endl;
             continue;
         }
+        allDefinedChildren.insert({childName, m_classes->nth(i)});
 
         if (parentName == childName)
         {
@@ -467,6 +471,13 @@ void ClassTable::CheckTypes()
             for(int i = formals->first(); formals->more(i); i = formals->next(i))
             {
                 Formal formal = formals->nth(i);
+                if (strcmp(formal->get_name()->get_string(), self->get_string()) == 0)
+                {
+                    semant_error(currentClass->get_filename(), formal);
+                    error_stream << "formal parameter cannot be named self" << endl;
+                    continue;
+                }
+
                 bool previouslyDefined = formalNames.find(formal->get_name()->get_string()) != formalNames.end();
                 if (previouslyDefined)
                 {
@@ -568,6 +579,14 @@ void ClassTable::CheckTypes()
 
                 std::string featureName = feature->get_name()->get_string();
 
+                if (featureName == "self")
+                {
+                    // Attribute with same name defined twice - continue to next attribute
+                    semant_error(parentClass->get_filename(), feature);
+                    error_stream << "'self' cannot be the name of an attribute." << endl;
+                    continue;
+                }
+
                 // First make sure that the attribute is not previously defined, note that we have already done this for methods previously
                 if (typeEnvironment.m_symbols.probe(featureName) != nullptr)
                 {
@@ -635,6 +654,10 @@ bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialP
 {
     if (potentialParentClass == SELF_TYPE) {
         potentialParentClass = typeEnvironment.m_currentClass->get_name();
+    }
+
+    if (childClass == SELF_TYPE) {
+        childClass = typeEnvironment.m_currentClass->get_name();
     }
 
     if (childClass == nullptr || potentialParentClass == nullptr) {
@@ -720,6 +743,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             // <expr>@<type>.id(<expr>,...,<expr>)
 
             Symbol identifierExprType = TypeCheckExpression(typeEnvironment, expression->get_dispatch_id_expr());
+            if (identifierExprType == SELF_TYPE) identifierExprType = typeEnvironment.m_currentClass->get_name();
             Symbol subclassName = expression->get_dispatch_subclass_type();
 
             bool isStaticDispatch = subclassName != nullptr;
@@ -764,7 +788,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             // Then gather all of the method formal types
             Expressions formalExpressions = expression->get_dispatch_param_expressions();
-            std::vector<Symbol> formalExpressionTypes;
             for(int i = formalExpressions->first(); formalExpressions->more(i); i = formalExpressions->next(i))
             {
                 Expression formalExpression = formalExpressions->nth(i);
@@ -775,17 +798,17 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                     error_stream << "Formal has unknown type in dispatch expression" << endl;
                     return nullptr;
                 }
-                formalExpressionTypes.push_back(formalExpressionType);
+                
+                Symbol foundFormalExpressionType = foundMethodInfo.GetFormalTypes()[i];
+                if (IsClassChildOfClassOrEqual(formalExpressionType, foundFormalExpressionType, typeEnvironment) == false)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                    error_stream << "Method signature in dispatch expression does not match declaration" << endl;
+                }
             }
 
-            // Finally test to make sure that the formals and return types match
-            MethodInfo dispatchMethodInfo = MethodInfo(foundMethodInfo.GetReturnType(), formalExpressionTypes);
-            if (foundMethodInfo != dispatchMethodInfo)
-            {
-                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
-                error_stream << "Method signature in dispatch expression does not match declartion" << endl;
-            }
-
+            // todo: For some reason the IO test expects the SELF_TYPE text to be present in the ast output whereas the basic test does not.
+            // No idea what the proper solution is here.
             // Handle self_type
             if (foundMethodInfo.GetReturnType() == SELF_TYPE)
             {
@@ -811,6 +834,12 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             let_class* letExpr = static_cast<let_class*>(expression);
 
             Symbol letId = letExpr->get_let_id();
+            if (strcmp(letId->get_string(), self->get_string()) == 0)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                error_stream << "let method identier cannot be named self" << endl;
+            }
+
             Symbol letTypeDecl = letExpr->get_let_type_decl();
             if (letTypeDecl == SELF_TYPE) letTypeDecl = typeEnvironment.m_currentClass->get_name();
             Expression letInit = letExpr->get_let_init();
@@ -842,15 +871,30 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             Symbol caseExprType = TypeCheckExpression(typeEnvironment, caseExpr); 
             Symbol lastBranchExprType = nullptr;
+            std::set<Symbol> branchTypes;
             for(int i = cases->first(); cases->more(i); i = cases->next(i))
             {
                 Case caseObj = cases->nth(i);
                 branch_class* caseBranch = static_cast<branch_class*>(caseObj);
 
                 Symbol idName = caseBranch->get_name();
+                if (strcmp(idName->get_string(), self->get_string()) == 0)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                    error_stream << "case branch identier cannot be named self" << endl;
+                }
+                
                 Symbol typeDecl = caseBranch->get_type();
                 if (typeDecl == SELF_TYPE) typeDecl = typeEnvironment.m_currentClass->get_name();
-                Expression branchExpr = caseBranch->get_expr(); 
+                Expression branchExpr = caseBranch->get_expr();
+
+                if (branchTypes.find(typeDecl) != branchTypes.end())
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), branchExpr);
+                    error_stream << "Branches in a case statement with the same type are illegal" << endl;
+                    return nullptr;
+                }
+                branchTypes.insert(typeDecl);
                 
                 // todo: apparently there is no requirement to test this but I don't see how the
                 //  case statement makes sense otherwise
@@ -961,7 +1005,8 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             if (symbolName == self->get_string())
             {
-                expressionType = typeEnvironment.m_currentClass->get_name();
+                //todo: come back to this later, this might need to be SELF_TYPE
+                expressionType = SELF_TYPE;
             }
             else
             {
