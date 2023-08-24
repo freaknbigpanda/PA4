@@ -905,7 +905,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             Expression caseExpr = typecaseExpr->get_case_expr();
 
             Symbol caseExprType = TypeCheckExpression(typeEnvironment, caseExpr); 
-            Symbol lastBranchExprType = nullptr;
             std::set<Symbol> branchTypes;
             for(int i = cases->first(); cases->more(i); i = cases->next(i))
             {
@@ -935,16 +934,14 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                 typeEnvironment.m_symbols.addid(idName->get_string(), typeDecl);
                 Symbol currentBranchExprType = TypeCheckExpression(typeEnvironment, branchExpr);
 
-                if (lastBranchExprType != nullptr) 
+                if (expressionType != nullptr) 
                 {
-                    expressionType = FirstCommonAncestor(lastBranchExprType, currentBranchExprType, typeEnvironment);
+                    expressionType = FirstCommonAncestor(expressionType, currentBranchExprType, typeEnvironment);
                 } 
                 else
                 {
                     expressionType = currentBranchExprType;
-                } 
-
-                lastBranchExprType = currentBranchExprType;
+                }
 
                 typeEnvironment.ExitScope();
             }
