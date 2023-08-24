@@ -122,6 +122,7 @@ private:
   bool ValidateInheritance();
   void CheckTypes();
   bool IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass, const TypeEnvironment& typeEnvironment);
+  Symbol FirstCommonAncestor(Symbol C, Symbol T, const TypeEnvironment &TypeEnvironment);
   Symbol TypeCheckExpression(TypeEnvironment& typeEnvironment, Expression expression);
 
   ostream& error_stream;

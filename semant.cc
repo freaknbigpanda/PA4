@@ -296,6 +296,13 @@ bool ClassTable::ValidateInheritance()
         string parentName = m_classes->nth(i)->get_parent()->get_string();
         string childName = m_classes->nth(i)->get_name()->get_string();
 
+        if (childName == SELF_TYPE->get_string())
+        {
+            semant_error(m_classes->nth(i));
+            error_stream << "Redefinition of basic class SELF_TYPE" << endl;
+            continue;
+        }
+
         if (parentName == Int->get_string() || parentName == Bool->get_string() || parentName == Str->get_string())
         {
             // class inherits from a basic type
@@ -402,7 +409,7 @@ bool ClassTable::ValidateInheritance()
     if (m_inheritanceNodeMap.find("Main") == m_inheritanceNodeMap.end())
     {
         semant_error();
-        error_stream << "Main class is not defined in the program" << endl;
+        error_stream << "Class Main is not defined." << endl;
     }
 
     if (semant_debug)
@@ -478,6 +485,13 @@ void ClassTable::CheckTypes()
                     continue;
                 }
 
+                if (formal->get_type() == SELF_TYPE)
+                {
+                    semant_error(currentClass->get_filename(), formal);
+                    error_stream << "formal parameter type cannot be SELF_TYPE" << endl;
+                    continue;
+                }
+
                 bool previouslyDefined = formalNames.find(formal->get_name()->get_string()) != formalNames.end();
                 if (previouslyDefined)
                 {
@@ -507,8 +521,6 @@ void ClassTable::CheckTypes()
         semant_error(m_classMap["Main"]);
         error_stream << "main() method that takes no params must be decalred in Main class" << endl;
     }
-
-    // So the problem is we need to check to make sure that attributes are not re-defined in child classes
 
     // ***** METHOD INHERITANCE CHECK PASS ***** //
     // Now check to make sure that methods defined in child classes conform to the appropiate signature
@@ -604,8 +616,6 @@ void ClassTable::CheckTypes()
         }
 
         // Now we have a complete list of attributes in our symbol table, continue to type checking
-        // todo: test a <- a
-        // This works because I gather the attribute types first but I don't know if it should be working
 
         // Feature type checking
         Features features = currentClass->get_features();
@@ -633,8 +643,14 @@ void ClassTable::CheckTypes()
             {
                 Symbol expressionType = TypeCheckExpression(typeEnvironment, expression);
 
+                // todo: really gross SELF_TYPE special cases... I should clean this up
                 Symbol featureType = feature->get_type();
-                if (expressionType == nullptr || IsClassChildOfClassOrEqual(expressionType, featureType, typeEnvironment) == false)
+                if (feature->is_attr() == false && featureType == SELF_TYPE && expressionType != SELF_TYPE)
+                {
+                    semant_error(typeEnvironment.m_currentClass->get_filename(), feature);
+                    error_stream << "Methods with return type SELF_TYPE must return self" << endl;
+                }
+                else if (expressionType == nullptr || IsClassChildOfClassOrEqual(expressionType, featureType, typeEnvironment) == false)
                 {
                     semant_error(typeEnvironment.m_currentClass->get_filename(), feature);
                     std::string errorString = feature->is_attr() ? "Attribute initialization type mismatch" : "Method expression and return type mismatch";
@@ -652,11 +668,19 @@ void ClassTable::CheckTypes()
 
 bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialParentClass, const TypeEnvironment& typeEnvironment)
 {
+    if (childClass == SELF_TYPE && potentialParentClass == SELF_TYPE)
+    {
+        // SELF_TYPE will always be from the same class so this is always true
+        return true;
+    }
+
     if (potentialParentClass == SELF_TYPE) {
-        potentialParentClass = typeEnvironment.m_currentClass->get_name();
+        // T <= SELF_TYPEc should always be false, see self type lecture
+        return false;
     }
 
     if (childClass == SELF_TYPE) {
+        // SELF_TYPEc <= T if C <= T
         childClass = typeEnvironment.m_currentClass->get_name();
     }
 
@@ -672,6 +696,30 @@ bool ClassTable::IsClassChildOfClassOrEqual(Symbol childClass, Symbol potentialP
     }
 
     return childNode->IsChildOfOrEqual(parentNode);
+}
+
+Symbol ClassTable::FirstCommonAncestor(Symbol first, Symbol second, const TypeEnvironment& typeEnvironment)
+{
+    if (first == SELF_TYPE && second == SELF_TYPE)
+    {
+        return SELF_TYPE;
+    }
+
+    if (first == SELF_TYPE)
+    {
+        first = typeEnvironment.m_currentClass->get_name();
+    }
+    else if (second == SELF_TYPE)
+    {
+        second = typeEnvironment.m_currentClass->get_name();
+    }
+
+    const InheritanceNode* thenTypeNode = m_inheritanceNodeMap[first->get_string()].get();
+    const InheritanceNode* elseTypeNode = m_inheritanceNodeMap[second->get_string()].get();
+
+    const InheritanceNode* commonAncestor = thenTypeNode->FirstCommonAncestor(elseTypeNode);
+
+    return m_classMap[commonAncestor->GetName()]->get_name();
 }
 
 Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expression expression)
@@ -698,17 +746,12 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
         }
         case ExpressionType::Block:
         {
-            // todo: I guess block expressions don't modify the scope??
-            //typeEnvironment.EnterScope();
-
             Expressions expressions = static_cast<block_class*>(expression)->get_body();
             for(int i = expressions->first(); expressions->more(i); i = expressions->next(i))
             {
                 Expression blockExpr = expressions->nth(i);
                 expressionType = TypeCheckExpression(typeEnvironment, blockExpr);
             }
-
-            //typeEnvironment.ExitScope();
             break;
         }
         case ExpressionType::Conditional:
@@ -716,7 +759,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             cond_class* conditional = static_cast<cond_class*>(expression);
             Symbol predType = TypeCheckExpression(typeEnvironment, conditional->get_pred());
 
-            // todo: test
             if (predType->get_string() != Bool->get_string())
             {
                 semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
@@ -726,13 +768,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             Symbol thenType = TypeCheckExpression(typeEnvironment, conditional->get_then());
             Symbol elseType = TypeCheckExpression(typeEnvironment, conditional->get_else());
-
-            const InheritanceNode* thenTypeNode = m_inheritanceNodeMap[thenType->get_string()].get();
-            const InheritanceNode* elseTypeNode = m_inheritanceNodeMap[elseType->get_string()].get();
-
-            const InheritanceNode* commonAncestor = thenTypeNode->FirstCommonAncestor(elseTypeNode);
-            expressionType = m_classMap[commonAncestor->GetName()]->get_name();
-
+            expressionType = FirstCommonAncestor(thenType, elseType, typeEnvironment);
             break;
         }
         case ExpressionType::Dispatch:
@@ -743,10 +779,17 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             // <expr>@<type>.id(<expr>,...,<expr>)
 
             Symbol identifierExprType = TypeCheckExpression(typeEnvironment, expression->get_dispatch_id_expr());
-            if (identifierExprType == SELF_TYPE) identifierExprType = typeEnvironment.m_currentClass->get_name();
+            bool isIdentifierTypeSelfType = identifierExprType == SELF_TYPE;
+            if (isIdentifierTypeSelfType) identifierExprType = typeEnvironment.m_currentClass->get_name();
             Symbol subclassName = expression->get_dispatch_subclass_type();
 
             bool isStaticDispatch = subclassName != nullptr;
+            if (isStaticDispatch && subclassName == SELF_TYPE)
+            {
+                semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
+                error_stream << "SELF_TYPE cannot be used in static dispatch expression" << endl;
+                return nullptr;
+            }
 
             // First check to make sure that the static type of the expr conforms to the subclass type we are dispatching too
             if (isStaticDispatch && IsClassChildOfClassOrEqual(identifierExprType, subclassName, typeEnvironment) == false)
@@ -761,10 +804,10 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             // Then check to make sure that a method with that name exists on the class or its parents
             bool methodFound = false;
             MethodInfo foundMethodInfo;
+            std::string methodName = expression->get_dispatch_method_name()->get_string();
             while (baseClassType != nullptr)
             {
-                MethodKey methodKey = MethodKey(baseClassType->get_string(),
-                    expression->get_dispatch_method_name()->get_string());
+                MethodKey methodKey = MethodKey(baseClassType->get_string(), methodName);
                 if (typeEnvironment.m_methodMap.find(methodKey) != typeEnvironment.m_methodMap.end())
                 {
                     foundMethodInfo = typeEnvironment.m_methodMap[methodKey];
@@ -807,12 +850,9 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                 }
             }
 
-            // todo: For some reason the IO test expects the SELF_TYPE text to be present in the ast output whereas the basic test does not.
-            // No idea what the proper solution is here.
-            // Handle self_type
             if (foundMethodInfo.GetReturnType() == SELF_TYPE)
             {
-                expressionType = identifierExprType;
+                expressionType = isIdentifierTypeSelfType ? SELF_TYPE : identifierExprType;
             }
             else
             {
@@ -823,10 +863,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
         case ExpressionType::New:
         {
             expressionType = static_cast<new__class*>(expression)->get_type_name();
-            if (expressionType == SELF_TYPE)
-            {
-                expressionType = typeEnvironment.m_currentClass->get_name();
-            }
             break;
         }
         case ExpressionType::Let:
@@ -841,7 +877,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             }
 
             Symbol letTypeDecl = letExpr->get_let_type_decl();
-            if (letTypeDecl == SELF_TYPE) letTypeDecl = typeEnvironment.m_currentClass->get_name();
             Expression letInit = letExpr->get_let_init();
             Expression letBody = letExpr->get_let_body();	
 
@@ -885,7 +920,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                 }
                 
                 Symbol typeDecl = caseBranch->get_type();
-                if (typeDecl == SELF_TYPE) typeDecl = typeEnvironment.m_currentClass->get_name();
                 Expression branchExpr = caseBranch->get_expr();
 
                 if (branchTypes.find(typeDecl) != branchTypes.end())
@@ -896,27 +930,14 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
                 }
                 branchTypes.insert(typeDecl);
                 
-                // todo: apparently there is no requirement to test this but I don't see how the
-                //  case statement makes sense otherwise
-                if (IsClassChildOfClassOrEqual(caseExprType, typeDecl, typeEnvironment) == false)
-                {
-                    semant_error(typeEnvironment.m_currentClass->get_filename(), branchExpr);
-                    error_stream << "Case branch id declared type is not a parent type of " << caseExprType->get_string() << endl;
-                    return nullptr;
-                }
-
                 typeEnvironment.EnterScope(); // case scope
 
                 typeEnvironment.m_symbols.addid(idName->get_string(), typeDecl);
                 Symbol currentBranchExprType = TypeCheckExpression(typeEnvironment, branchExpr);
 
-                if (lastBranchExprType != nullptr) {
-                    // find the first common ancestor
-                    const InheritanceNode* lastTypeNode = m_inheritanceNodeMap[lastBranchExprType->get_string()].get();
-                    const InheritanceNode* currentTypeNode = m_inheritanceNodeMap[currentBranchExprType->get_string()].get();
-                    const InheritanceNode* commonAncestor = lastTypeNode->FirstCommonAncestor(currentTypeNode);
-
-                    expressionType = m_classMap[commonAncestor->GetName()]->get_name();
+                if (lastBranchExprType != nullptr) 
+                {
+                    expressionType = FirstCommonAncestor(lastBranchExprType, currentBranchExprType, typeEnvironment);
                 } 
                 else
                 {
@@ -1005,7 +1026,6 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
 
             if (symbolName == self->get_string())
             {
-                //todo: come back to this later, this might need to be SELF_TYPE
                 expressionType = SELF_TYPE;
             }
             else

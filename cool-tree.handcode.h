@@ -222,7 +222,7 @@ Expression get_rhs() { return e2; }
 
 #define neg_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Neg; }	\
-Expression get_lhs() { return e1; }
+Expression get_rhs() { return e1; }
 
 #define lt_EXTRAS	\
 ExpressionType get_expr_type() { return ExpressionType::Lt; }	\
