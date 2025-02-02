@@ -44,7 +44,7 @@ typedef Expressions_class *Expressions;
 typedef list_node<Case> Cases_class;
 typedef Cases_class *Cases;
 
-enum class ExpressionType: uint8_t {
+enum class ExpressionType : unsigned char {
 	Assign,
 	StaticDispatch,
 	Dispatch,
