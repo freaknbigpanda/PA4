@@ -883,7 +883,7 @@ Symbol ClassTable::TypeCheckExpression(TypeEnvironment& typeEnvironment,  Expres
             if (letInit->get_expr_type() != ExpressionType::NoExpr)
             {
                 Symbol initType = TypeCheckExpression(typeEnvironment, letInit);
-                if (initType != letTypeDecl)
+                if (IsClassChildOfClassOrEqual(initType, letTypeDecl, typeEnvironment) == false)
                 {
                     semant_error(typeEnvironment.m_currentClass->get_filename(), expression);
                     error_stream << "let-init method static type does not match type declaration" << endl;
